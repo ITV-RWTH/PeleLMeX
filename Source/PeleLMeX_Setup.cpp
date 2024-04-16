@@ -356,6 +356,7 @@ PeleLM::readParameters()
   pp.query("use_wbar", m_use_wbar);
   pp.query("unity_Le", m_unity_Le);
   pp.query("fixed_Le", m_fixed_Le);
+  pp.query("fixed_Le_i", m_fixed_Le_i);
   pp.query("fixed_Pr", m_fixed_Pr);
   if (m_unity_Le != 0) {
     m_fixed_Le = 1;
@@ -376,6 +377,23 @@ PeleLM::readParameters()
     amrex::Real Lewis = 1.0;
     pp.query("Lewis", Lewis);
     m_Lewis_inv = 1.0 / Lewis;
+  }
+  if (m_fixed_Le_i != 0 && !m_do_les) { // Only ask for Lewis number when not
+                                      // LES, determined by Prandtl and
+                                      // Schmidt outside of this
+    Vector<std::string> spec_names;
+    pele::physics::eos::speciesNames<pele::physics::PhysicsType::eos_type>(spec_names);
+
+    ParmParse pplewisi("peleLM.Lewis");
+    
+    amrex::Real Lewis_i;
+    for(int n=0; n < spec_names.size(); n++){
+      Lewis_i = 1.0;
+
+      pplewisi.query(spec_names[n].c_str(), Lewis_i);
+      amrex::Print() << "Le_" << spec_names[n] << " = " << Lewis_i << std::endl;
+      m_Lewis_i_inv[n] = 1.0 / Lewis_i;
+    }
   }
   if (m_fixed_Pr != 0) {
     amrex::Real Prandtl = 0.7;

@@ -12,9 +12,11 @@ getTransportCoeff(
   int j,
   int k,
   const bool do_fixed_Le,
+  const bool do_fixed_Le_i,
   const bool do_fixed_Pr,
   const bool do_soret,
   amrex::Real LeInv,
+  amrex::Array<amrex::Real, NUM_SPECIES> Le_i_Inv,
   amrex::Real PrInv,
   amrex::Array4<const amrex::Real> const& rhoY,
   amrex::Array4<const amrex::Real> const& T,
@@ -57,7 +59,7 @@ getTransportCoeff(
   bool get_xi = false; // always ignore bulk viscosity
   bool get_mu = true;  // always get dynamic viscosity
   bool get_lam = !do_fixed_Pr;
-  bool get_Ddiag = !do_fixed_Le;
+  bool get_Ddiag = (!do_fixed_Le && !do_fixed_Le_i);
   bool get_chi = do_soret;
   auto trans = pele::physics::PhysicsType::transport();
   trans.transport(
@@ -75,6 +77,15 @@ getTransportCoeff(
     for (int n = 0; n < NUM_SPECIES; n++) {
       rhoDi(i, j, k, n) = ScInv * mu_cgs * 1.0e-1_rt;
     }
+  } else if (do_fixed_Pr && do_fixed_Le_i) { // fixed Pr and Le, transport all dependent
+                                    // on visc
+    amrex::Real cpmix = 0.0_rt;
+    eos.TY2Cp(T(i, j, k), y, cpmix);
+    lambda(i, j, k) = PrInv * cpmix * mu_cgs * 1.0e-5_rt;
+    amrex::Real ScInv = PrInv * LeInv;
+    for (int n = 0; n < NUM_SPECIES; n++) {
+      rhoDi(i, j, k, n) = PrInv * Le_i_Inv[n] * mu_cgs * 1.0e-1_rt;
+    }
   } else if (do_fixed_Pr) { // fixed Pr, still use species diffs
     amrex::Real cpmix = 0.0_rt;
     eos.TY2Cp(T(i, j, k), y, cpmix);
@@ -88,6 +99,13 @@ getTransportCoeff(
     eos.TY2Cp(T(i, j, k), y, cpmix);
     for (int n = 0; n < NUM_SPECIES; n++) {
       rhoDi(i, j, k, n) = lambda_cgs * 1.0e-1_rt * LeInv / cpmix;
+    }
+  } else if (do_fixed_Le_i) { // fixed Le_i, still use thermal cond
+    lambda(i, j, k) = lambda_cgs * 1.0e-5_rt;
+    amrex::Real cpmix = 0.0_rt;
+    eos.TY2Cp(T(i, j, k), y, cpmix);
+    for (int n = 0; n < NUM_SPECIES; n++) {
+      rhoDi(i, j, k, n) = lambda_cgs * 1.0e-1_rt * Le_i_Inv[n] / cpmix;
     }
   } else { // full MA model, with Soret if needed
     lambda(i, j, k) = lambda_cgs * 1.0e-5_rt;

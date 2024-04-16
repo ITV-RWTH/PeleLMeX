@@ -1831,8 +1831,10 @@ public:
   int m_unity_Le = 0;
   int m_fixed_Pr = 0;
   int m_fixed_Le = 0;
+  int m_fixed_Le_i = 0;
 
   amrex::Real m_Lewis_inv = 1.0;
+  amrex::Array<amrex::Real, NUM_SPECIES> m_Lewis_i_inv;
   amrex::Real m_Prandtl_inv = 1.0 / 0.7;
   amrex::Real m_Schmidt_inv = 1.0 / 0.7;
 
