@@ -65,6 +65,7 @@ bcnormal(
   const amrex::Real* /*x[AMREX_SPACEDIM]*/,
   const int /*m_nAux*/,
   amrex::Real s_ext[NVAR],
+  amrex::Real* /*s_aux[NVAR]*/,
   const int /*idir*/,
   const int /*sgn*/,
   const amrex::Real /*time*/,
