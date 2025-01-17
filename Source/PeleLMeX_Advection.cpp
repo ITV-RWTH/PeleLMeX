@@ -266,6 +266,7 @@ PeleLM::getScalarAdvForce(
     for (MFIter mfi(advData->Forcing[lev], TilingIfNotGPU()); mfi.isValid();
          ++mfi) {
       const Box& bx = mfi.tilebox();
+      FArrayBox DummyFab(bx, 1);
       auto const& rho = ldata_p->state.const_array(mfi, DENSITY);
       auto const& rhoY = ldata_p->state.const_array(mfi, FIRSTSPEC);
       auto const& T = ldata_p->state.const_array(mfi, TEMP);
@@ -276,8 +277,11 @@ PeleLM::getScalarAdvForce(
       auto const& extRhoH = m_extSource[lev]->const_array(mfi, RHOH);
       auto const& fY = advData->Forcing[lev].array(mfi, 0);
       auto const& fT = advData->Forcing[lev].array(mfi, NUM_SPECIES);
-      auto const& fAux = advData->Forcing_aux[lev].array(mfi, 0);
-      auto const& dn_aux = diffData->Dn_aux[lev].const_array(mfi, 0);
+      auto const& fAux = (m_nAux > 0) ? advData->Forcing_aux[lev].array(mfi, 0)
+                                      : DummyFab.array();
+      auto const& dn_aux = (m_nAux > 0)
+                             ? diffData->Dn_aux[lev].const_array(mfi, 0)
+                             : DummyFab.const_array();
       amrex::ParallelFor(
         bx, [rho, rhoY, T, dn, ddn, r, fY, fT, fAux, extRhoY, extRhoH,
              aux_diffuse_d, dn_aux, nAux = m_nAux, dp0dt = m_dp0dt,
@@ -297,10 +301,12 @@ PeleLM::getScalarAdvForce(
       m_cur_time, GetVecOfPtrs(advData->Forcing), advData->Forcing[0].nGrow());
   }
   // Fill auxiliary forcing ghost cells
-  if (advData->Forcing_aux[0].nGrow() > 0) {
-    fillpatch_forces(
-      m_cur_time, GetVecOfPtrs(advData->Forcing_aux),
-      advData->Forcing_aux[0].nGrow());
+  if (m_nAux > 0) {
+    if (advData->Forcing_aux[0].nGrow() > 0) {
+      fillpatch_forces(
+        m_cur_time, GetVecOfPtrs(advData->Forcing_aux),
+        advData->Forcing_aux[0].nGrow());
+    }
   }
 }
 

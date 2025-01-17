@@ -1076,13 +1076,14 @@ PeleLM::differentialDiffusionUpdate(
     for (MFIter mfi(advData->Forcing[lev], TilingIfNotGPU()); mfi.isValid();
          ++mfi) {
       const Box& bx = mfi.tilebox();
+      FArrayBox DummyFab(bx, 1);
       auto const& rhoY_o = ldata_p->state.const_array(mfi, FIRSTSPEC);
       auto const& fY = advData->Forcing[lev].array(mfi, 0);
       auto const& aux_o = (m_nAux > 0)
                             ? ldata_p->auxiliaries.const_array(mfi, 0)
-                            : ldata_p->state.const_array(mfi, 0);
+                            : DummyFab.const_array();
       auto const& fAux = (m_nAux > 0) ? advData->Forcing_aux[lev].array(mfi, 0)
-                                      : advData->Forcing[lev].array(mfi, 0);
+                                      : DummyFab.array();
       amrex::ParallelFor(
         bx, [rhoY_o, fY, aux_o, fAux, dt = m_dt,
              nAux = m_nAux] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
@@ -1269,24 +1270,23 @@ PeleLM::differentialDiffusionUpdate(
 #endif
     for (MFIter mfi(ldata_p->state, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
       const Box& bx = mfi.tilebox();
+      FArrayBox DummyFab(bx, 1);
       auto const& rhoY = ldata_p->state.array(mfi, FIRSTSPEC);
       auto const& dhat = diffData->Dhat[lev].const_array(mfi);
       auto const& force = advData->Forcing[lev].const_array(mfi, 0);
-      auto const& dwbar =
-        (m_use_wbar) != 0
-          ? diffData->Dwbar[lev].const_array(mfi)
-          : diffData->Dhat[lev].const_array(mfi); // Dummy unused Array4
-      auto const& dT = (m_use_soret) != 0
-                         ? diffData->DT[lev].const_array(mfi)
-                         : diffData->Dhat[lev].const_array(mfi);
-      auto const& aux = (m_nAux > 0) ? ldata_p->auxiliaries.array(mfi, 0)
-                                     : ldata_p->state.array(mfi, 0);
+      auto const& dwbar = (m_use_wbar != 0)
+                            ? diffData->Dwbar[lev].const_array(mfi)
+                            : DummyFab.const_array();
+      auto const& dT = (m_use_soret != 0) ? diffData->DT[lev].const_array(mfi)
+                                          : DummyFab.const_array();
+      auto const& aux =
+        (m_nAux > 0) ? ldata_p->auxiliaries.array(mfi, 0) : DummyFab.array();
       auto const& dhat_aux = (m_nAux > 0)
                                ? diffData->Dhat_aux[lev].const_array(mfi)
-                               : diffData->Dhat[lev].const_array(mfi, 0);
+                               : DummyFab.const_array();
       auto const& force_aux = (m_nAux > 0)
                                 ? advData->Forcing_aux[lev].const_array(mfi, 0)
-                                : advData->Forcing[lev].const_array(mfi, 0);
+                                : DummyFab.const_array();
       amrex::ParallelFor(
         bx, [rhoY, dhat, force, dwbar, dT, aux, dhat_aux, force_aux,
              nAux = m_nAux, dt = m_dt, use_wbar = m_use_wbar,
@@ -1661,6 +1661,7 @@ PeleLM::getScalarDiffForce(
     for (MFIter mfi(advData->Forcing[lev], TilingIfNotGPU()); mfi.isValid();
          ++mfi) {
       const Box& bx = mfi.tilebox();
+      FArrayBox DummyFab(bx, 1);
       auto const& dn = diffData->Dn[lev].const_array(mfi, 0);
       auto const& ddn = diffData->Dn[lev].const_array(mfi, NUM_SPECIES + 1);
       auto const& dnp1k = diffData->Dnp1[lev].const_array(mfi, 0);
@@ -1672,24 +1673,23 @@ PeleLM::getScalarDiffForce(
       auto const& extRhoH = m_extSource[lev]->const_array(mfi, RHOH);
       auto const& fY = advData->Forcing[lev].array(mfi, 0);
       auto const& fT = advData->Forcing[lev].array(mfi, NUM_SPECIES);
-      auto const& dwbar =
-        (m_use_wbar != 0)
-          ? diffData->Dwbar[lev].const_array(mfi, 0)
-          : diffData->Dn[lev].const_array(mfi, 0); // Dummy unused Array4
+      auto const& dwbar = (m_use_wbar != 0)
+                            ? diffData->Dwbar[lev].const_array(mfi, 0)
+                            : DummyFab.const_array();
       auto const& dT = (m_use_soret != 0)
                          ? diffData->DT[lev].const_array(mfi, 0)
-                         : diffData->Dn[lev].const_array(mfi, 0);
+                         : DummyFab.const_array();
       auto const& fAux = (m_nAux > 0) ? advData->Forcing_aux[lev].array(mfi, 0)
-                                      : advData->Forcing[lev].array(mfi, 0);
+                                      : DummyFab.array();
       auto const& a_aux = (m_nAux > 0)
                             ? advData->AofS_aux[lev].const_array(mfi, 0)
-                            : advData->AofS[lev].const_array(mfi, 0);
+                            : DummyFab.const_array();
       auto const& dn_aux = (m_nAux > 0)
                              ? diffData->Dn_aux[lev].const_array(mfi, 0)
-                             : diffData->Dn[lev].const_array(mfi, 0);
+                             : DummyFab.const_array();
       auto const& dnp1k_aux = (m_nAux > 0)
                                 ? diffData->Dnp1_aux[lev].const_array(mfi, 0)
-                                : diffData->Dnp1[lev].const_array(mfi, 0);
+                                : DummyFab.const_array();
       amrex::ParallelFor(
         bx, [dn, ddn, dnp1k, ddnp1k, do_react = m_do_react, r, a, extRhoY,
              extRhoH, dwbar, dT, use_wbar = m_use_wbar, use_soret = m_use_soret,
