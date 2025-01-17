@@ -275,8 +275,8 @@ PeleLMeX algorithm
     peleLM.a.diff_coeff = 1e-4             # [OPT] Diffusion coefficient for this auxiliary variable 
      
     peleLM.user_defined_ext_sources = 0    # [OPT, DEF=0] Enable user defined source terms. Requires local ProblemSpecificFunctions.cpp.
-    
-    
+
+
 Transport coefficients and LES
 ------------------------------
 
@@ -295,6 +295,13 @@ Transport coefficients and LES
     peleLM.les_cs_sigma = 1.35             # [OPT, DEF=1.35] If using Sigma LES model, provides model coefficient
     peleLM.les_v = 0                       # [OPT, DEF=0] Verbosity level for LES model
     peleLM.plot_les = 0                    # [OPT, DEF=0] If doing LES, whether to plot the turbulent viscosity
+    transport.use_soret = 0                # [OPT, DEF=0] Compute diffusion including the Soret effect (note, this option is inherited from PelePhysics)
+
+.. note::
+   When using the Soret effect, boundary condition corrections are needed at isothermal boundaries,
+   which are not fully supported. Currently a correction for all terms except the wbar term
+   is applied at isothermal domain boundaries (this is likely sufficient), while no corrections are applied
+   at isothermal embedded boundaries (so use caution for isothermal EBs with Soret diffusion active).
 
 Chemistry integrator
 --------------------
