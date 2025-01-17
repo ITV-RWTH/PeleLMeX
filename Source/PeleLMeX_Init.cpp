@@ -216,6 +216,11 @@ PeleLM::initData()
     averageDownState(AmrNewTime);
     fillPatchState(AmrNewTime);
 
+    if (m_nAux > 0) {
+      averageDownAux(AmrNewTime);
+      fillPatchAux(AmrNewTime);
+    }
+
     //----------------------------------------------------------------
     // If performing UnitTest, let's stop here
     if (runMode() != "normal") {
@@ -352,11 +357,11 @@ PeleLM::initLevelData(int lev)
     auto const& aux_arr =
       (m_nAux > 0) ? ldata_p->auxiliaries.array(mfi) : DummyFab.array();
     amrex::ParallelFor(
-      bx, [=, m_incompressible = m_incompressible] AMREX_GPU_DEVICE(
-            int i, int j, int k) noexcept {
+      bx, [=, m_incompressible = m_incompressible,
+           m_nAux = m_nAux] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
         pelelmex_initdata(
-          i, j, k, m_incompressible, state_arr, aux_arr, geomdata, *lprobparm,
-          lpmfdata);
+          i, j, k, m_incompressible, m_nAux, state_arr, aux_arr, geomdata,
+          *lprobparm, lpmfdata);
       });
   }
 
@@ -397,7 +402,7 @@ PeleLM::projectInitSolution()
       std::unique_ptr<AdvanceDiffData> diffData;
       diffData = std::make_unique<AdvanceDiffData>(
         finest_level, grids, dmap, m_factory, m_nGrowAdv, m_use_wbar,
-        m_use_soret, is_initialization);
+        m_use_soret, m_nAux, is_initialization);
       calcDivU(
         is_initialization, computeDiffusionTerm, do_avgDown, AmrNewTime,
         diffData);
@@ -452,7 +457,7 @@ PeleLM::projectInitSolution()
         std::unique_ptr<AdvanceDiffData> diffData;
         diffData = std::make_unique<AdvanceDiffData>(
           finest_level, grids, dmap, m_factory, m_nGrowAdv, m_use_wbar,
-          m_use_soret, is_initialization);
+          m_use_soret, m_nAux, is_initialization);
         calcDivU(
           is_initialization, computeDiffusionTerm, do_avgDown, AmrNewTime,
           diffData);

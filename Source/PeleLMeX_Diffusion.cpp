@@ -53,10 +53,18 @@ PeleLM::computeDifferentialDiffusionTerms(
   if (a_time == AmrOldTime) {
     AMREX_ASSERT(diffData->Dn.size() == finest_level + 1);
     AMREX_ASSERT(diffData->Dn[0].nComp() >= NUM_SPECIES + 2);
+    if (m_nAux > 0) {
+      AMREX_ASSERT(diffData->Dn_aux.size() == finest_level + 1);
+      AMREX_ASSERT(diffData->Dn_aux[0].nComp() == m_nAux);
+    }
   }
   if (a_time != AmrOldTime) {
     AMREX_ASSERT(diffData->Dnp1.size() == finest_level + 1);
     AMREX_ASSERT(diffData->Dnp1[0].nComp() >= NUM_SPECIES + 2);
+    if (m_nAux > 0) {
+      AMREX_ASSERT(diffData->Dnp1_aux.size() == finest_level + 1);
+      AMREX_ASSERT(diffData->Dnp1_aux[0].nComp() == m_nAux);
+    }
   }
 
   //----------------------------------------------------------------
@@ -66,6 +74,7 @@ PeleLM::computeDifferentialDiffusionTerms(
   // [NUM_SPECIES+1]   DiffDiff    : \sum_k ( h_k * \Flux_k )
   int nGrow = 0; // No need for ghost face on fluxes
   Vector<Array<MultiFab, AMREX_SPACEDIM>> fluxes(finest_level + 1);
+  Vector<Array<MultiFab, AMREX_SPACEDIM>> fluxes_aux(finest_level + 1);
   for (int lev = 0; lev <= finest_level; ++lev) {
     const auto& ba = grids[lev];
     const auto& factory = Factory(lev);
@@ -73,6 +82,11 @@ PeleLM::computeDifferentialDiffusionTerms(
       fluxes[lev][idim].define(
         amrex::convert(ba, IntVect::TheDimensionVector(idim)), dmap[lev],
         NUM_SPECIES + 2, nGrow, MFInfo(), factory);
+      if (m_nAux > 0) {
+        fluxes_aux[lev][idim].define(
+          amrex::convert(ba, IntVect::TheDimensionVector(idim)), dmap[lev],
+          m_nAux, nGrow, MFInfo(), factory);
+      }
     }
   }
 #ifdef AMREX_USE_EB
@@ -102,12 +116,13 @@ PeleLM::computeDifferentialDiffusionTerms(
   if (m_isothermalEB != 0) {
     computeDifferentialDiffusionFluxes(
       a_time, GetVecOfArrOfPtrs(fluxes), GetVecOfPtrs(EBfluxes), wbarFluxVec,
-      soretFluxVec);
+      soretFluxVec, GetVecOfArrOfPtrs(fluxes_aux));
   } else
 #endif
   {
     computeDifferentialDiffusionFluxes(
-      a_time, GetVecOfArrOfPtrs(fluxes), {}, wbarFluxVec, soretFluxVec);
+      a_time, GetVecOfArrOfPtrs(fluxes), {}, wbarFluxVec, soretFluxVec,
+      GetVecOfArrOfPtrs(fluxes_aux));
   }
 
   // If doing species balances, compute face domain integrals
@@ -128,6 +143,9 @@ PeleLM::computeDifferentialDiffusionTerms(
   Vector<MultiFab*> diffTermVec = (a_time == AmrOldTime)
                                     ? GetVecOfPtrs(diffData->Dn)
                                     : GetVecOfPtrs(diffData->Dnp1);
+  Vector<MultiFab*> diffTermAuxVec = (a_time == AmrOldTime)
+                                       ? GetVecOfPtrs(diffData->Dn_aux)
+                                       : GetVecOfPtrs(diffData->Dnp1_aux);
 #ifdef AMREX_USE_EB
   auto bcRecSpec = fetchBCRecArray(FIRSTSPEC, NUM_SPECIES);
   auto bcRecSpec_d = convertToDeviceVector(bcRecSpec);
@@ -155,6 +173,11 @@ PeleLM::computeDifferentialDiffusionTerms(
   fluxDivergence(
     diffTermVec, 0, GetVecOfArrOfPtrs(fluxes), 0, NUM_SPECIES + 2,
     intensiveFluxes, -1.0);
+  if (m_nAux > 0) {
+    fluxDivergence(
+      diffTermAuxVec, 0, GetVecOfArrOfPtrs(fluxes_aux), 0, m_nAux,
+      intensiveFluxes, -1.0);
+  }
 #endif
 
   // Get the wbar term if appropriate
@@ -193,8 +216,14 @@ PeleLM::computeDifferentialDiffusionTerms(
   for (int lev = 0; lev <= finest_level; ++lev) {
     if (a_time == AmrOldTime) {
       EB_set_covered(diffData->Dn[lev], 0.0);
+      if (m_nAux > 0) {
+        EB_set_covered(diffData->Dn_aux[lev], 0.0);
+      }
     } else {
       EB_set_covered(diffData->Dnp1[lev], 0.0);
+      if (m_nAux > 0) {
+        EB_set_covered(diffData->Dnp1_aux[lev], 0.0);
+      }
     }
     if ((is_init == 0) && (m_use_wbar != 0)) {
       EB_set_covered(diffData->Dwbar[lev], 0.0);
@@ -429,7 +458,8 @@ PeleLM::computeDifferentialDiffusionFluxes(
 #endif
   ,
   const Vector<Array<MultiFab*, AMREX_SPACEDIM>>& a_wbarfluxes,
-  const Vector<Array<MultiFab*, AMREX_SPACEDIM>>& a_soretfluxes)
+  const Vector<Array<MultiFab*, AMREX_SPACEDIM>>& a_soretfluxes,
+  const Vector<Array<MultiFab*, AMREX_SPACEDIM>>& a_auxfluxes)
 {
   BL_PROFILE("PeleLMeX::computeDifferentialDiffusionFluxes()");
 
@@ -461,7 +491,7 @@ PeleLM::computeDifferentialDiffusionFluxes(
   // Species fluxes
   // Get the species BCRec
   auto bcRecSpec = fetchBCRecArray(FIRSTSPEC, NUM_SPECIES);
-
+  auto bcRecAux = fetchBCRecAuxArray(0, m_nAux);
 #ifdef PELE_USE_EFIELD
   // Get the species diffusion fluxes from the DiffusionOp
   // Don't average down just yet
@@ -492,6 +522,13 @@ PeleLM::computeDifferentialDiffusionFluxes(
       GetVecOfConstPtrs(getDensityVect(a_time)),
       GetVecOfConstPtrs(getDiffusivityVect(a_time)), 0, bcRecSpec, NUM_SPECIES,
       do_avgDown, GetVecOfConstPtrs(spec_boundary));
+
+  if (m_nAux > 0) {
+    getMCDiffusionOp(m_nAux)->computeDiffFluxes(
+      a_auxfluxes, 0, GetVecOfConstPtrs(getAuxVect(a_time)), 0, {},
+      GetVecOfConstPtrs(getAuxDiffusivityVect(a_time)), 0, bcRecAux, m_nAux,
+      do_avgDown, GetVecOfConstPtrs(spec_boundary));
+  }
 #endif
 
   // Add the wbar term
@@ -1000,6 +1037,7 @@ PeleLM::differentialDiffusionUpdate(
   // [NUM_SPECIES+1]   DiffDiff    : \sum_k ( h_k * \Flux_k )
   int nGrow = 0; // No need for ghost face on fluxes
   Vector<Array<MultiFab, AMREX_SPACEDIM>> fluxes(finest_level + 1);
+  Vector<Array<MultiFab, AMREX_SPACEDIM>> fluxes_aux(finest_level + 1);
   for (int lev = 0; lev <= finest_level; ++lev) {
     const auto& ba = grids[lev];
     const auto& factory = Factory(lev);
@@ -1007,6 +1045,11 @@ PeleLM::differentialDiffusionUpdate(
       fluxes[lev][idim].define(
         amrex::convert(ba, IntVect::TheDimensionVector(idim)), dmap[lev],
         NUM_SPECIES + 2, nGrow, MFInfo(), factory);
+      if (m_nAux > 0) {
+        fluxes_aux[lev][idim].define(
+          amrex::convert(ba, IntVect::TheDimensionVector(idim)), dmap[lev],
+          m_nAux, nGrow, MFInfo(), factory);
+      }
     }
   }
 #ifdef AMREX_USE_EB
@@ -1035,12 +1078,21 @@ PeleLM::differentialDiffusionUpdate(
       const Box& bx = mfi.tilebox();
       auto const& rhoY_o = ldata_p->state.const_array(mfi, FIRSTSPEC);
       auto const& fY = advData->Forcing[lev].array(mfi, 0);
+      auto const& aux_o = (m_nAux > 0)
+                            ? ldata_p->auxiliaries.const_array(mfi, 0)
+                            : ldata_p->state.const_array(mfi, 0);
+      auto const& fAux = (m_nAux > 0) ? advData->Forcing_aux[lev].array(mfi, 0)
+                                      : advData->Forcing[lev].array(mfi, 0);
       amrex::ParallelFor(
-        bx,
-        [rhoY_o, fY, dt = m_dt] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+        bx, [rhoY_o, fY, aux_o, fAux, dt = m_dt,
+             nAux = m_nAux] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
           for (int n = 0; n < NUM_SPECIES; n++) {
             fY(i, j, k, n) *= dt;
             fY(i, j, k, n) += rhoY_o(i, j, k, n);
+          }
+          for (int n = 0; n < nAux; n++) {
+            fAux(i, j, k, n) *= dt;
+            fAux(i, j, k, n) += aux_o(i, j, k, n);
           }
         });
     }
@@ -1050,7 +1102,7 @@ PeleLM::differentialDiffusionUpdate(
   // Species diffusion solve
   // Get the species BCRec
   auto bcRecSpec = fetchBCRecArray(FIRSTSPEC, NUM_SPECIES);
-
+  auto bcRecAux = fetchBCRecAuxArray(0, m_nAux);
   Vector<MultiFab> spec_boundary;
   if (m_soret_boundary_override != 0) {
     spec_boundary.resize(finest_level + 1);
@@ -1121,6 +1173,15 @@ PeleLM::differentialDiffusionUpdate(
         getDensityVect(AmrNewTime)), // this triggers proper scaling by density
       GetVecOfConstPtrs(getDiffusivityVect(AmrNewTime)), 0, bcRecSpec,
       NUM_SPECIES, 0, m_dt, GetVecOfConstPtrs(spec_boundary));
+  if (m_nAux > 0) {
+    // Solve for \widetilde{c^{np1,kp1}}
+    // Don't need to provide acoeff, or density.
+    getMCDiffusionOp(m_nAux)->diffuse_scalar(
+      GetVecOfPtrs(getAuxVect(AmrNewTime)), 0,
+      GetVecOfConstPtrs(advData->Forcing_aux), 0, GetVecOfArrOfPtrs(fluxes_aux),
+      0, {}, {}, GetVecOfConstPtrs(getAuxDiffusivityVect(AmrNewTime)), 0,
+      bcRecAux, m_nAux, 0, m_dt, {});
+  }
 #endif
 
   // Add lagged Wbar term
@@ -1189,9 +1250,16 @@ PeleLM::differentialDiffusionUpdate(
     GetVecOfPtrs(diffData->Dhat), 0, GetVecOfArrOfPtrs(fluxes), 0, NUM_SPECIES,
     1, -1.0);
 
+  // Repeat for auxiliaries
+  if (m_nAux > 0) {
+    fluxDivergence(
+      GetVecOfPtrs(diffData->Dhat_aux), 0, GetVecOfArrOfPtrs(fluxes_aux), 0,
+      m_nAux, 1, -1.0);
+  }
+
   // Update species
-  // Remove the Wbar term because we included it in both the dhat and the
-  // forcing.
+  // Remove the Wbar and Soret terms because we included them both the dhat and
+  // the forcing.
   for (int lev = 0; lev <= finest_level; ++lev) {
 
     auto* ldata_p = getLevelDataPtr(lev, AmrNewTime);
@@ -1211,18 +1279,30 @@ PeleLM::differentialDiffusionUpdate(
       auto const& dT = (m_use_soret) != 0
                          ? diffData->DT[lev].const_array(mfi)
                          : diffData->Dhat[lev].const_array(mfi);
-
+      auto const& aux = (m_nAux > 0) ? ldata_p->auxiliaries.array(mfi, 0)
+                                     : ldata_p->state.array(mfi, 0);
+      auto const& dhat_aux = (m_nAux > 0)
+                               ? diffData->Dhat_aux[lev].const_array(mfi)
+                               : diffData->Dhat[lev].const_array(mfi, 0);
+      auto const& force_aux = (m_nAux > 0)
+                                ? advData->Forcing_aux[lev].const_array(mfi, 0)
+                                : advData->Forcing[lev].const_array(mfi, 0);
       amrex::ParallelFor(
-        bx, NUM_SPECIES,
-        [rhoY, dhat, force, dwbar, dT, dt = m_dt, use_wbar = m_use_wbar,
-         use_soret =
-           m_use_soret] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-          rhoY(i, j, k, n) = force(i, j, k, n) + dt * dhat(i, j, k, n);
-          if (use_wbar != 0) {
-            rhoY(i, j, k, n) -= dt * dwbar(i, j, k, n);
+        bx, [rhoY, dhat, force, dwbar, dT, aux, dhat_aux, force_aux,
+             nAux = m_nAux, dt = m_dt, use_wbar = m_use_wbar,
+             use_soret =
+               m_use_soret] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+          for (int n = 0; n < NUM_SPECIES; n++) {
+            rhoY(i, j, k, n) = force(i, j, k, n) + dt * dhat(i, j, k, n);
+            if (use_wbar != 0) {
+              rhoY(i, j, k, n) -= dt * dwbar(i, j, k, n);
+            }
+            if (use_soret != 0) {
+              rhoY(i, j, k, n) -= dt * dT(i, j, k, n);
+            }
           }
-          if (use_soret != 0) {
-            rhoY(i, j, k, n) -= dt * dT(i, j, k, n);
+          for (int n = 0; n < nAux; n++) {
+            aux(i, j, k, n) = force_aux(i, j, k, n) + dt * dhat_aux(i, j, k, n);
           }
         });
     }
@@ -1566,6 +1646,10 @@ PeleLM::getScalarDiffForce(
   std::unique_ptr<AdvanceAdvData>& advData,
   std::unique_ptr<AdvanceDiffData>& diffData)
 {
+
+  int* aux_advect_d = convertToDeviceVector(m_aux_advect).dataPtr();
+  int* aux_diffuse_d = convertToDeviceVector(m_DiffTypeAux).dataPtr();
+
   for (int lev = 0; lev <= finest_level; ++lev) {
 
     // Get t^{n} data pointer
@@ -1589,37 +1673,33 @@ PeleLM::getScalarDiffForce(
       auto const& fY = advData->Forcing[lev].array(mfi, 0);
       auto const& fT = advData->Forcing[lev].array(mfi, NUM_SPECIES);
       auto const& dwbar =
-        (m_use_wbar) != 0
+        (m_use_wbar != 0)
           ? diffData->Dwbar[lev].const_array(mfi, 0)
           : diffData->Dn[lev].const_array(mfi, 0); // Dummy unused Array4
-      auto const& dT = (m_use_soret) != 0
+      auto const& dT = (m_use_soret != 0)
                          ? diffData->DT[lev].const_array(mfi, 0)
                          : diffData->Dn[lev].const_array(mfi, 0);
-
+      auto const& fAux = (m_nAux > 0) ? advData->Forcing_aux[lev].array(mfi, 0)
+                                      : advData->Forcing[lev].array(mfi, 0);
+      auto const& a_aux = (m_nAux > 0)
+                            ? advData->AofS_aux[lev].const_array(mfi, 0)
+                            : advData->AofS[lev].const_array(mfi, 0);
+      auto const& dn_aux = (m_nAux > 0)
+                             ? diffData->Dn_aux[lev].const_array(mfi, 0)
+                             : diffData->Dn[lev].const_array(mfi, 0);
+      auto const& dnp1k_aux = (m_nAux > 0)
+                                ? diffData->Dnp1_aux[lev].const_array(mfi, 0)
+                                : diffData->Dnp1[lev].const_array(mfi, 0);
       amrex::ParallelFor(
-        bx,
-        [dn, ddn, dnp1k, ddnp1k, dwbar, dT, use_wbar = m_use_wbar,
-         use_soret = m_use_soret, do_react = m_do_react, r, a, extRhoY, extRhoH,
-         fY, fT, dp0dt = m_dp0dt,
-         is_closed_ch =
-           m_closed_chamber] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+        bx, [dn, ddn, dnp1k, ddnp1k, do_react = m_do_react, r, a, extRhoY,
+             extRhoH, dwbar, dT, use_wbar = m_use_wbar, use_soret = m_use_soret,
+             fY, fT, fAux, a_aux, dn_aux, dnp1k_aux, aux_advect_d,
+             aux_diffuse_d, dp0dt = m_dp0dt, is_closed_ch = m_closed_chamber,
+             nAux = m_nAux] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
           buildDiffusionForcing(
             i, j, k, dn, ddn, dnp1k, ddnp1k, r, a, dp0dt, is_closed_ch,
-            do_react, fY, fT);
-          if (use_wbar != 0) {
-            for (int n = 0; n < NUM_SPECIES; n++) {
-              fY(i, j, k, n) += dwbar(i, j, k, n);
-            }
-          }
-          if (use_soret != 0) {
-            for (int n = 0; n < NUM_SPECIES; n++) {
-              fY(i, j, k, n) += dT(i, j, k, n);
-            }
-          }
-          for (int n = 0; n < NUM_SPECIES; n++) {
-            fY(i, j, k, n) += extRhoY(i, j, k, n);
-          }
-          fT(i, j, k) += extRhoH(i, j, k);
+            do_react, fY, fT, dwbar, dT, extRhoY, extRhoH, use_wbar, use_soret,
+            fAux, a_aux, dn_aux, dnp1k_aux, aux_advect_d, aux_diffuse_d, nAux);
         });
     }
   }
@@ -1628,6 +1708,11 @@ PeleLM::getScalarDiffForce(
   if (advData->Forcing[0].nGrow() > 0) {
     fillpatch_forces(
       m_cur_time, GetVecOfPtrs(advData->Forcing), advData->Forcing[0].nGrow());
+  }
+  if (m_nAux > 0 && advData->Forcing_aux[0].nGrow() > 0) {
+    fillpatch_forces(
+      m_cur_time, GetVecOfPtrs(advData->Forcing_aux),
+      advData->Forcing_aux[0].nGrow());
   }
 }
 

@@ -306,15 +306,19 @@ PeleLM::calcDiffusivity(const TimeStamp& a_time)
       eos.molecular_weight(mwt.arr);
     }
 #endif
+    // Fill the diff_aux MF with user input
+    // TODO: add ability to use species/thermal diffusivity or viscosity
+    for (int n = 0; n < m_nAux; n++) {
+      ldata_p->diff_aux_cc.setVal(m_aux_diff_coeff[n], n, 1);
+    }
 
     const amrex::Real Pr_inv = m_Prandtl_inv;
     const amrex::Real Le_inv = m_Lewis_inv;
     const bool do_fixed_Le = (m_fixed_Le != 0);
     const bool do_fixed_Pr = (m_fixed_Pr != 0);
     const bool do_soret = (m_use_soret != 0);
-    const int soret_idx =
-      do_soret ? 1
-               : 0; // pass soret array, or pass mu as dummy (won't do anything)
+    // pass soret array, or pass mu as dummy (won't do anything)
+    const int soret_idx = do_soret ? 1 : 0;
     amrex::ParallelFor(
       ldata_p->diff_cc, ldata_p->diff_cc.nGrowVect(),
       [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {

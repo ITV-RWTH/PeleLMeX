@@ -102,9 +102,8 @@ getTransportCoeff(
       }
     }
     if (do_soret) {
-#if defined(H2_ID) && \
-  defined(            \
-    H_ID) // Soret coefficient scaling, see Howarth, Day, Pitsch & Aspden
+#if defined(H2_ID) && defined(H_ID)
+      // Soret coefficient scaling, see Howarth, Day, Pitsch & Aspden
       rhotheta(i, j, k, H2_ID) *= 0.664;
       rhotheta(i, j, k, H_ID) *= 0.58;
 #else
@@ -909,6 +908,10 @@ buildAdvectionForcing(
   int do_react,
   amrex::Array4<amrex::Real> const& forceY,
   amrex::Array4<amrex::Real> const& forceT,
+  amrex::Array4<amrex::Real> const& forceAux,
+  amrex::Array4<const amrex::Real> const& dn_aux,
+  const int* aux_diffuse,
+  int nAux,
   pele::physics::eos::EosParm<pele::physics::PhysicsType::eos_type> const*
     eosparm) noexcept
 {
@@ -941,6 +944,13 @@ buildAdvectionForcing(
     forceT(i, j, k) += dp0dt; // Add dp0/dt
   }
 
+  for (int n = 0; n < nAux; n++) {
+    if (aux_diffuse[n] != 0) {
+      forceAux(i, j, k, n) = dn_aux(i, j, k, n);
+    }
+    // TO DO: source terms for Aux
+  }
+
   amrex::Real cpmix = 0.0_rt;
   eos.TY2Cp(T(i, j, k), y, cpmix);
   amrex::Real cpmixinv = 1.0_rt / cpmix * 1.0e4_rt; // CGS -> MKS conversion
@@ -964,23 +974,56 @@ buildDiffusionForcing(
   int const& closed_chamber,
   int do_react,
   amrex::Array4<amrex::Real> const& forceY,
-  amrex::Array4<amrex::Real> const& forceT) noexcept
+  amrex::Array4<amrex::Real> const& forceT,
+  amrex::Array4<const amrex::Real> const& dwbar,
+  amrex::Array4<const amrex::Real> const& dT,
+  amrex::Array4<const amrex::Real> const& extRhoY,
+  amrex::Array4<const amrex::Real> const& extRhoH,
+  int use_wbar,
+  int use_soret,
+  amrex::Array4<amrex::Real> const& forceAux,
+  amrex::Array4<const amrex::Real> const& a_aux,
+  amrex::Array4<const amrex::Real> const& dn_aux,
+  amrex::Array4<const amrex::Real> const& dnp1k_aux,
+  const int* aux_advect,
+  const int* aux_diffuse,
+  int nAux) noexcept
 {
   using namespace amrex::literals;
 
   for (int n = 0; n < NUM_SPECIES; n++) {
-    forceY(i, j, k, n) =
-      a(i, j, k, n) + 0.5_rt * (dn(i, j, k, n) - dnp1k(i, j, k, n));
+    forceY(i, j, k, n) = a(i, j, k, n) +
+                         0.5_rt * (dn(i, j, k, n) - dnp1k(i, j, k, n)) +
+                         extRhoY(i, j, k, n);
     if (do_react != 0) {
       forceY(i, j, k, n) += r(i, j, k, n);
+    }
+    if (use_wbar != 0) {
+      forceY(i, j, k, n) += dwbar(i, j, k, n);
+    }
+    if (use_soret != 0) {
+      forceY(i, j, k, n) += dT(i, j, k, n);
     }
   }
   forceT(i, j, k) = a(i, j, k, NUM_SPECIES) +
                     0.5_rt * (dn(i, j, k, NUM_SPECIES) + ddn(i, j, k) -
-                              dnp1k(i, j, k, NUM_SPECIES) - ddnp1k(i, j, k));
+                              dnp1k(i, j, k, NUM_SPECIES) - ddnp1k(i, j, k)) +
+                    extRhoH(i, j, k);
 
   if (closed_chamber == 1) {
     forceT(i, j, k) += dp0dt;
+  }
+
+  for (int n = 0; n < nAux; n++) {
+    forceAux(i, j, k, n) = 0.0;
+    if (aux_diffuse[n] != 0) {
+      forceAux(i, j, k, n) +=
+        0.5_rt * (dn_aux(i, j, k, n) - dnp1k_aux(i, j, k, n));
+    }
+    if (aux_advect[n] != 0) {
+      forceAux(i, j, k, n) += a_aux(i, j, k, n);
+    }
+    // To do: source terms for aux
   }
 }
 

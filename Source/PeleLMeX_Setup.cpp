@@ -390,6 +390,31 @@ PeleLM::readParameters()
     }
   }
 
+  m_nAux = pp.countval("aux_vars");
+  if (m_nAux > 0) {
+    if (m_nAux > NVAR) {
+      Abort("Too many auxiliary variables (m_nAux > NVAR)");
+    }
+    m_aux_names.resize(m_nAux);
+    m_AdvTypeAux.resize(m_nAux);
+    m_aux_advect.resize(m_nAux);
+    m_DiffTypeAux.resize(m_nAux);
+    m_aux_diff_coeff.resize(m_nAux);
+    pp.query("aux_verbose", m_aux_verbose);
+    for (int n = 0; n < m_nAux; n++) {
+      pp.get("aux_vars", m_aux_names[n], n);
+      std::string aux_prefix = "peleLM." + m_aux_names[n];
+      ParmParse ppa(aux_prefix);
+      ppa.get("advect", m_aux_advect[n]);
+      // Assume conservative
+      m_AdvTypeAux[n] = 1;
+      ppa.get("diff_coeff", m_aux_diff_coeff[n]);
+      // check diffusion coefficient isn't negative
+      m_aux_diff_coeff[n] = std::max(0.0, m_aux_diff_coeff[n]);
+      m_DiffTypeAux[n] = (m_aux_diff_coeff[n] > 0.0) ? 1 : 0;
+    }
+  }
+
   // -----------------------------------------
   // LES
   // -----------------------------------------
@@ -913,18 +938,18 @@ PeleLM::variablesSetup()
 #endif
   }
 
-  if (m_nAux > 0) {
-    Print() << " First passive scalar: " << FIRSTAUX << "\n";
-    for (int n = 0; n < m_nAux; n++) {
-      stateComponents.emplace_back(FIRSTAUX + n, "Aux_" + std::to_string(n));
-    }
-  }
-
   if (m_incompressible != 0) {
     Print() << " => Total number of state variables: " << AMREX_SPACEDIM
             << "\n";
   } else {
     Print() << " => Total number of state variables: " << NVAR << "\n";
+  }
+  if (m_nAux > 0) {
+    for (int n = 0; n < m_nAux; n++) {
+      Print() << " Auxiliary " + std::to_string(n + 1) + ": " << m_aux_names[n]
+              << "\n";
+    }
+    Print() << " => Total number of auxiliary variables: " << m_nAux << "\n";
   }
   Print() << PrettyLine;
   Print() << "\n";
