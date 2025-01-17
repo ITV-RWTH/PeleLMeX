@@ -39,7 +39,8 @@ peleLM.c.diff_coeff = 1e-2
 
 #amr.restart = chk00005
 #amr.check_int = 2000
-amr.plot_int = 100
+#amr.plot_int = 100
+amr.plot_per = 0.5
 amr.max_step = 400
 amr.dt_shrink = 0.1
 amr.stop_time = 1
