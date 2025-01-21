@@ -32,6 +32,7 @@ function(build_pele_exe pele_exe_name pele_physics_lib_name)
        ${SRC_DIR}/PeleLMeX_Advection.cpp
        ${SRC_DIR}/PeleLMeX_BC.cpp
        ${SRC_DIR}/PeleLMeX_BCfill.H
+       ${SRC_DIR}/PeleLMeX_Catalyst.cpp
        ${SRC_DIR}/PeleLMeX_Data.cpp
        ${SRC_DIR}/PeleLMeX_Derive.H
        ${SRC_DIR}/PeleLMeX_Derive.cpp
@@ -89,6 +90,12 @@ function(build_pele_exe pele_exe_name pele_physics_lib_name)
       PRIVATE
         ${SRC_DIR}/PeleLMeX_ProblemSpecificFunctions.cpp)
   endif()
+
+  if(PELE_ENABLE_CATALYST)
+    target_sources(${pele_exe_name}
+      PRIVATE
+        ${SRC_DIR}/PeleLMeX_Catalyst.cpp)
+  endif()  
   
   if(PELE_PHYSICS_ENABLE_SOOT)
     target_sources(${pele_exe_name}

@@ -39,6 +39,11 @@
 #include <PeleLMRad.H>
 #endif
 
+#ifdef USE_CATALYST
+#include <AMReX_Conduit_Blueprint.H>
+#include <catalyst.hpp>
+#endif
+
 // Forward declarations
 #ifdef PELE_USE_SPRAY
 class SprayParticleContainer;
@@ -135,6 +140,17 @@ public:
 
   // SprayInit
   void SprayInit();
+#endif
+
+#ifdef USE_CATALYST
+  // Initialize Catalyst
+  void CatalystInit();
+  
+  // Execute Catalyst
+  void CatalystExecute();
+
+  // Finalize Catalyst
+  void CatalystFinalize();
 #endif
 
   // VariablesSetup

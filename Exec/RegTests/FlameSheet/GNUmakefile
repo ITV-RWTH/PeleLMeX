@@ -25,6 +25,13 @@ DEBUG = FALSE
 FSANITIZER = FALSE
 THREAD_SANITIZER = FALSE
 
+# Visualisation
+USE_CATALYST = TRUE
+USE_CONDUIT = TRUE
+CONDUIT_DIR = /p/software/default/stages/2024/software/Conduit/0.8.8-gpsmpi-2023a/
+CATALYST_DIR = /p/software/default/stages/2024/software/Catalyst/2.0.0-rc4-gpsmpi-2023a/
+
+
 # PeleLMeX
 USE_EFIELD = FALSE
 
