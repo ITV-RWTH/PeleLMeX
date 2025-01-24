@@ -13,7 +13,7 @@ PeleLM::Evolve()
   int plt_justDidIt = 0;
   int chk_justDidIt = 0;
 
-#ifdef USE_CATALYST
+#ifdef PELE_USE_CATALYST
   CatalystInit();
 #endif
 
@@ -75,7 +75,7 @@ PeleLM::Evolve()
     // Diagnostics
     doDiagnostics();
 
-#ifdef USE_CATALYST
+#ifdef PELE_USE_CATALYST
     CatalystExecute();
 #endif
 
@@ -115,7 +115,7 @@ PeleLM::Evolve()
        (m_dt < m_min_dt) || over_max_wall_time || dump_and_stop);
   }
 
-#ifdef USE_CATALYST
+#ifdef PELE_USE_CATALYST
   CatalystFinalize();
 #endif
 

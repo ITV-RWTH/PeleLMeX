@@ -1,0 +1,13 @@
+#########################################################
+# ParaView (https://gitlab.kitware.com/paraview/) Support 
+#########################################################
+
+
+ifdef PARAVIEW_DIR
+  INCLUDE_LOCATIONS += $(PARAVIEW_DIR)/include/paraview-5.12
+  VPATH_LOCATIONS   += $(PARAVIEW_DIR)/include/paraview-5.12
+  LIBRARY_LOCATIONS += $(PARAVIEW_DIR)/lib
+  LIBRARIES += -Wl,-rpath,$(PARAVIEW_DIR)/lib
+  LIBRARIES += -lvtksys-pv5.13
+endif
+

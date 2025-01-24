@@ -10,12 +10,13 @@
 
 #include <string>
 
-#ifdef USE_CATALYST
+#ifdef PELE_USE_CATALYST
 #include <catalyst.hpp>
 #include <conduit_cpp_to_c.hpp>
+//#include <vtkDataObjectToConduit.h>
 #endif
 
-#ifdef USE_CATALYST
+#ifdef PELE_USE_CATALYST
 using namespace amrex;
 void PeleLM::CatalystInit() {
     ParmParse const pp_catalyst("catalyst");
@@ -69,7 +70,7 @@ void PeleLM::CatalystExecute () {
     state["time"].set(m_cur_time);
 
     auto& meshChannel = node["catalyst/channels/mesh"];
-    meshChannel["type"].set_string("multimesh");
+    meshChannel["type"].set_string("amrmesh");
     auto& meshData = meshChannel["data"];
 
     //----------------------------------------------------------------
@@ -432,6 +433,9 @@ void PeleLM::CatalystExecute () {
         finest_level + 1, amrex::GetVecOfConstPtrs(mf_plt), plt_VarsName, 
         Geom(), m_cur_time, level_steps, refRatio(), meshData);
 
+    node.print();
+
+    // Catalyst Execute
     catalyst_status err = catalyst_execute(conduit::c_node(&node));
     if (err != catalyst_status_ok)
     {
