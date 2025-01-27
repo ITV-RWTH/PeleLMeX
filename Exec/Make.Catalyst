@@ -1,0 +1,4 @@
+ifdef CATALYST_DIR
+  INCLUDE_LOCATIONS += $(CATALYST_DIR)/include/catalyst-2.0
+  VPATH_LOCATIONS   += $(CATALYST_DIR)/include/catalyst-2.0
+endif
