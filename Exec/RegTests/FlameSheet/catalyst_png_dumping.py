@@ -1,3 +1,4 @@
+import os 
 from paraview import catalyst
 from paraview.simple import *  # noqa: F403
 
@@ -5,7 +6,10 @@ from paraview.simple import *  # noqa: F403
 variable = "density"
 
 activeSource1 = GetActiveSource()
-ImportPresets(filename='/p/project1/paj2206/kim17/PeleLMeX/Exec/RegTests/FlameSheet/AMR_Coloramp.json', location=16)
+current_file_path = os.path.dirname(os.path.abspath(__file__))
+json_file_path = os.path.join(current_file_path, "AMR_coloramp.json")
+ImportPresets(filename=json_file_path, location=16)
+# ImportPresets(filename='/p/project1/paj2206/kim17/PeleLMeX/Exec/RegTests/FlameSheet/AMR_Colormap.json', location=16)
 # get active view
 renderView1 = GetActiveViewOrCreate('RenderView')
 
