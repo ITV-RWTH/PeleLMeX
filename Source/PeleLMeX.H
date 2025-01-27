@@ -142,7 +142,7 @@ public:
   void SprayInit();
 #endif
 
-#ifdef USE_CATALYST
+#ifdef PELE_USE_CATALYST
   // Initialize Catalyst
   void CatalystInit();
   
@@ -151,6 +151,9 @@ public:
 
   // Finalize Catalyst
   void CatalystFinalize();
+
+  // Convert 2D Conduit nodes to 3D
+  void AddDummyZAxes(conduit::Node &meshData);
 #endif
 
   // VariablesSetup

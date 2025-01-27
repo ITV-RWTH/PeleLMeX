@@ -59,6 +59,33 @@ void PeleLM::CatalystInit() {
     }
 }
 
+void PeleLM::AddDummyZAxes (conduit::Node &meshData) {
+    conduit::NodeIterator itr = meshData.children();
+    while (itr.has_next()){
+        conduit::Node &dom_node = itr.next();
+
+        // Add coordsets
+        conduit::Node &coords = dom_node["coordsets/coords"];
+        coords["dims/k"]       = 1;
+        coords["spacing/dz"]   = 1;
+        coords["origin/z"]     = 0.0;
+
+        // Add topologies 
+        conduit::Node &topo = dom_node["topologies/topo/elements/origin"];
+        topo["k0"] = 0;
+
+        // Add neststes
+        conduit::Node &windows = dom_node["nestsets/nest/windows"];
+        conduit::NodeIterator witr = windows.children();
+        while(witr.has_next()){
+            conduit::Node &win_node = witr.next();
+            win_node["origin/k"]    = 0;
+            win_node["dims/k"]      = 1;
+            win_node["ratio/k"]     = 1;
+        }
+    }
+}
+
 void PeleLM::CatalystExecute () {
     amrex::Print() << "Running Catalyst pipeline scripts... \n";
     BL_PROFILE("PeleLM::FillConduitNode()");
@@ -432,13 +459,15 @@ void PeleLM::CatalystExecute () {
     amrex::MultiLevelToBlueprint(
         finest_level + 1, amrex::GetVecOfConstPtrs(mf_plt), plt_VarsName, 
         Geom(), m_cur_time, level_steps, refRatio(), meshData);
-
-    node.print();
+    
+    if (AMREX_SPACEDIM == 2) {
+        std::cout << "this is 2 dimension" << std::endl;
+        AddDummyZAxes(meshData);
+    }
 
     // Catalyst Execute
     catalyst_status err = catalyst_execute(conduit::c_node(&node));
-    if (err != catalyst_status_ok)
-    {
+    if (err != catalyst_status_ok) {
         std::string message = " Error: Failed to execute Catalyst!\n";
         std::cerr << message << err << std::endl;
         amrex::Print() << message;

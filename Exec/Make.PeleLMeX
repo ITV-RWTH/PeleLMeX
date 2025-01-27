@@ -60,7 +60,7 @@ endif
 ifeq ($(USE_CATALYST), TRUE)
    # Catalyst in situ visualisation
    DEFINES += -DPELE_USE_CATALYST
-   Bpack += $(PELE_HOME)/Exec/Make.ParaView
+   Bpack += $(PELE_HOME)/Exec/Make.Catalyst
 endif
 
 ifeq ($(shell test 0$(PELELM_NUM_ODE) -gt 0; echo $$?), 0)
