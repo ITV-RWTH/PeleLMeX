@@ -34,3 +34,9 @@ Transport_Model = Constant
 
 PELE_HOME ?= ../../..
 include $(PELE_HOME)/Exec/Make.PeleLMeX
+
+# Visualisation
+USE_CATALYST = TRUE
+USE_CONDUIT = TRUE
+CONDUIT_DIR = ${EBROOTCONDUIT}
+CATALYST_DIR = ${EBROOTCATALYST}

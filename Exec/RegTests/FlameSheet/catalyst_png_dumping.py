@@ -3,13 +3,14 @@ from paraview import catalyst
 from paraview.simple import *  # noqa: F403
 
 
-variable = "density"
+variable = "Y(CH3)"
 
+# set a new colormap
 activeSource1 = GetActiveSource()
 current_file_path = os.path.dirname(os.path.abspath(__file__))
-json_file_path = os.path.join(current_file_path, "AMR_coloramp.json")
+json_file_path = os.path.join(current_file_path, "AMR_Colormap.json")
 ImportPresets(filename=json_file_path, location=16)
-# ImportPresets(filename='/p/project1/paj2206/kim17/PeleLMeX/Exec/RegTests/FlameSheet/AMR_Colormap.json', location=16)
+
 # get active view
 renderView1 = GetActiveViewOrCreate('RenderView')
 
@@ -60,4 +61,4 @@ pNG1.Writer.ImageResolution = [1528, 746]
 pNG1.Writer.Format = 'PNG'
 
 options = catalyst.Options()
-options.ExtractsOutputDirectory = "datasets"
+options.ExtractsOutputDirectory = "CH3"

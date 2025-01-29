@@ -461,7 +461,6 @@ void PeleLM::CatalystExecute () {
         Geom(), m_cur_time, level_steps, refRatio(), meshData);
     
     if (AMREX_SPACEDIM == 2) {
-        std::cout << "this is 2 dimension" << std::endl;
         AddDummyZAxes(meshData);
     }
 
