@@ -13,7 +13,6 @@
 #ifdef PELE_USE_CATALYST
 #include <catalyst.hpp>
 #include <conduit_cpp_to_c.hpp>
-//#include <vtkDataObjectToConduit.h>
 #endif
 
 #ifdef PELE_USE_CATALYST
@@ -59,7 +58,7 @@ void PeleLM::CatalystInit() {
     }
 }
 
-void PeleLM::AddDummyZAxes (conduit::Node &meshData) {
+void PeleLM::AddDummyZAxis (conduit::Node &meshData) {
     conduit::NodeIterator itr = meshData.children();
     while (itr.has_next()){
         conduit::Node &dom_node = itr.next();
@@ -461,7 +460,7 @@ void PeleLM::CatalystExecute () {
         Geom(), m_cur_time, level_steps, refRatio(), meshData);
     
     if (AMREX_SPACEDIM == 2) {
-        AddDummyZAxes(meshData);
+        AddDummyZAxis(meshData);
     }
 
     // Catalyst Execute

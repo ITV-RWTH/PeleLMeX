@@ -12,7 +12,6 @@ PeleLM::Evolve()
 
   int plt_justDidIt = 0;
   int chk_justDidIt = 0;
-
 #ifdef PELE_USE_CATALYST
   CatalystInit();
 #endif

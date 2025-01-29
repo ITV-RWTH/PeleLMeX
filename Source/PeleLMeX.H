@@ -39,8 +39,9 @@
 #include <PeleLMRad.H>
 #endif
 
-#ifdef USE_CATALYST
+#ifdef PELE_USE_CATALYST
 #include <AMReX_Conduit_Blueprint.H>
+#include <conduit/conduit.hpp>
 #include <catalyst.hpp>
 #endif
 
@@ -153,7 +154,7 @@ public:
   void CatalystFinalize();
 
   // Convert 2D Conduit nodes to 3D
-  void AddDummyZAxes(conduit::Node &meshData);
+  void AddDummyZAxis(conduit::Node &meshData);
 #endif
 
   // VariablesSetup
