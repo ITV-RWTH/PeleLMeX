@@ -36,7 +36,7 @@ peleLM.sdc_iterMax = 1
 peleLM.num_init_iter = 2
 
 #---------------------- Time Stepping CONTROL --------------------
-amr.max_step = 400
+amr.max_step = 1
 amr.stop_time = 0.07
 amr.cfl = 0.2
 amr.dt_shrink = 1.0
@@ -74,3 +74,6 @@ amr.gtemp.field_name    = temp
 #amrex.fpe_trap_invalid = 1
 #amrex.fpe_trap_zero = 1
 #amrex.fpe_trap_overflow = 1
+
+#---------------------- In-Situ Visualisation CONTROL-------------------------
+catalyst.script_paths = "catalyst_png_dumping.py"
