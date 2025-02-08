@@ -124,6 +124,9 @@ public:
 
   // ReadProblemParameters
   void readProbParm();
+  
+  // UpdateProblemParameters
+  void updateProbParm();
 
   // ReadGridFile
   void
