@@ -79,3 +79,6 @@ amr.gtemp.field_name    = temp
 #amrex.fpe_trap_invalid = 1
 #amrex.fpe_trap_zero = 1
 #amrex.fpe_trap_overflow = 1
+
+#---------------------- In-Situ Visualisation CONTROL-------------------------
+catalyst.script_paths = "catalyst_vti_dumping.py"

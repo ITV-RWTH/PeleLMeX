@@ -63,3 +63,7 @@ endif
 ifeq ($(USE_PARTICLES), TRUE)
   CEXE_sources += PeleLMeX_SprayParticles.cpp
 endif
+
+ifeq ($(USE_CATALYST), TRUE)
+  CEXE_sources += PeleLMeX_Catalyst.cpp
+endif

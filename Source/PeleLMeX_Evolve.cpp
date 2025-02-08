@@ -12,6 +12,9 @@ PeleLM::Evolve()
 
   int plt_justDidIt = 0;
   int chk_justDidIt = 0;
+#ifdef PELE_USE_CATALYST
+  CatalystInit();
+#endif
 
   while (!do_not_evolve) {
 
@@ -71,6 +74,10 @@ PeleLM::Evolve()
     // Diagnostics
     doDiagnostics();
 
+#ifdef PELE_USE_CATALYST
+    CatalystExecute();
+#endif
+
     // Check message
     bool dump_and_stop = checkMessage("dump_and_stop");
     bool plt_and_continue = checkMessage("plt_and_continue");
@@ -106,6 +113,10 @@ PeleLM::Evolve()
        (m_stop_time >= 0.0 && m_cur_time >= m_stop_time - 1.0e-12 * m_dt) ||
        (m_dt < m_min_dt) || over_max_wall_time || dump_and_stop);
   }
+
+#ifdef PELE_USE_CATALYST
+  CatalystFinalize();
+#endif
 
   if (m_verbose > 0) {
     amrex::Print() << "\n >> Final simulation time: " << m_cur_time << "\n";
