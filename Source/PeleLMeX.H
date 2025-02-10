@@ -163,6 +163,8 @@ public:
   void AddDummyZAxis(conduit::Node &meshData);
 
 #endif
+  void Feedback();
+  void Regler(double& T_center, double& T_coflow, double& V_mean, double& V_coflow, double& phi);
 
   // VariablesSetup
   void variablesSetup();

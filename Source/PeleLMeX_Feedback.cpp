@@ -16,12 +16,11 @@ PeleLM::Feedback()
     double V_coflow       = PeleLM::prob_parm->V_coflow;
     double phi            = PeleLM::prob_parm->phi;
 
-    Regler(&T_center,&T_coflow,&V_mean,&V_coflow,&phi);
+    Regler(T_center,T_coflow,V_mean,V_coflow,phi);
 
     std::ofstream controlFile("Control.inp");
     if (!controlFile.is_open()) {
         std::cerr << "Error: Control.inp can't be opened." << std::endl;
-        return 1;
     }
 
     controlFile << "prob.T_center "       << T_center       << "\n";
@@ -31,8 +30,5 @@ PeleLM::Feedback()
     controlFile << "prob.phi "            << phi            << "\n";
 
     controlFile.close();
-
-
-    return 0;
 
 }

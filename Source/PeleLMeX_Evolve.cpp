@@ -65,6 +65,8 @@ PeleLM::Evolve()
     // Active control
     int is_restart = 0;
     activeControl(is_restart);
+
+    Feedback();
     // Active prob parms
     bool update_prob_parm = checkMessage("update_prob_parm");
     if (update_prob_parm) {
