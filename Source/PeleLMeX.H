@@ -122,6 +122,9 @@ public:
   // ReadIOParameters
   void readIOParameters();
 
+  // readInSituParameters
+  void readInSituParameters();
+
   // ReadProblemParameters
   void readProbParm();
   

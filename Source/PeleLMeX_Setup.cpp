@@ -219,6 +219,8 @@ PeleLM::readParameters()
 {
   BL_PROFILE("PeleLMeX::readParameters()");
 
+  readInSituParameters();
+  
   readIOParameters();
 
   readInSituParameters();
