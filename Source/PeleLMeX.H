@@ -150,7 +150,7 @@ public:
   // Initialize Catalyst
   void CatalystInit();
   
-  // Execute Catalyst
+  // Catalyst Execute 
   void CatalystExecute();
 
   // Finalize Catalyst
@@ -158,6 +158,7 @@ public:
 
   // Convert 2D Conduit nodes to 3D
   void AddDummyZAxis(conduit::Node &meshData);
+
 #endif
 
   // VariablesSetup
@@ -1012,6 +1013,12 @@ public:
     const amrex::Vector<const amrex::MultiFab*>& a_MF,
     const std::string& pltname);
   //-----------------------------------------------------------------------------
+
+  //-----------------------------------------------------------------------------
+  // In-Situ
+  int do_inSitu_Visualization;
+  int inSitu_plot_int; 
+   //-----------------------------------------------------------------------------
 
   //-----------------------------------------------------------------------------
   // Diagnostics

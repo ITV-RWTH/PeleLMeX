@@ -221,6 +221,8 @@ PeleLM::readParameters()
 
   readIOParameters();
 
+  readInSituParameters();
+
   ParmParse pp("peleLM");
 
   // -----------------------------------------
@@ -799,6 +801,16 @@ PeleLM::checkSetupParams()
     }
 #endif
   }
+}
+
+void
+PeleLM::readInSituParameters()
+{
+  BL_PROFILE_VAR("PeleLMeX::readInSituParameters()", readInSituParameters);
+
+  ParmParse pp("catlayst");
+  pp.query("do_inSitu_Visualization", do_inSitu_Visualization);
+  pp.query("inSitu_plot_int", inSitu_plot_int);
 }
 
 void

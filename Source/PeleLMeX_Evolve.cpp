@@ -65,13 +65,13 @@ PeleLM::Evolve()
     // Active control
     int is_restart = 0;
     activeControl(is_restart);
-
     // Active prob parms
     bool update_prob_parm = checkMessage("update_prob_parm");
     if (update_prob_parm) {
       if (m_verbose > 0) {
         amrex::Print() << " Update prob_parm \n";
       }
+      //Feedback();
       updateProbParm();
       Gpu::copy(Gpu::hostToDevice, prob_parm, prob_parm + 1, prob_parm_d);
     }
@@ -85,7 +85,9 @@ PeleLM::Evolve()
     doDiagnostics();
 
 #ifdef PELE_USE_CATALYST
+  if(do_inSitu_Visualization && m_nstep%inSitu_plot_int==0){
     CatalystExecute();
+  }
 #endif
 
     // Check message
