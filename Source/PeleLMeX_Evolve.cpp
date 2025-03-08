@@ -66,7 +66,7 @@ PeleLM::Evolve()
     int is_restart = 0;
     activeControl(is_restart);
 
-    Feedback();
+    //Feedback();
     // Active prob parms
     bool update_prob_parm = checkMessage("update_prob_parm");
     if (update_prob_parm) {
@@ -89,6 +89,9 @@ PeleLM::Evolve()
 #ifdef PELE_USE_CATALYST
   if(do_inSitu_Visualization && m_nstep%inSitu_plot_int==0){
     CatalystExecute();
+  }
+  if(do_inSitu_Steering && m_nstep%inSitu_Steering_int==0){
+    CatalystSteering();
   }
 #endif
 

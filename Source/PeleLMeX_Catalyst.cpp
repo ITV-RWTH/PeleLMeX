@@ -58,36 +58,72 @@ void PeleLM::CatalystInit() {
     }
 }
 
-void PeleLM::AddDummyZAxis (conduit::Node &meshData) {
-    conduit::NodeIterator itr = meshData.children();
-    while (itr.has_next()){
-        conduit::Node &dom_node = itr.next();
+void PeleLM::AddDummyZAxis (conduit::Node &mesh_data) {
+    // We assume that the input node has multiple children named domain_XXXXXX
+    // (as produced by amrex::MultiLevelToBlueprint).  Each child is a Blueprint
+    // mesh domain. We'll iterate over them:
+    const std::vector<std::string> domain_names = mesh_data.child_names();
+    for (const auto &dom_name : domain_names)
+    {
+        conduit::Node &dom = mesh_data[dom_name];
 
-        // Add coordsets
-        conduit::Node &coords = dom_node["coordsets/coords"];
-        coords["dims/k"]       = 1;
-        coords["spacing/dz"]   = 1;
-        coords["origin/z"]     = 0.0;
+        // Look for a uniform coordset at dom["coordsets/coords"]
+        if (!dom.has_path("coordsets/coords/type")) continue;
+        if (std::string(dom["coordsets/coords/type"].as_string()) != "uniform")
+            continue;
 
-        // Add topologies 
-        conduit::Node &topo = dom_node["topologies/topo/elements/origin"];
-        topo["k0"] = 0;
-
-        // Add neststes
-        conduit::Node &windows = dom_node["nestsets/nest/windows"];
-        conduit::NodeIterator witr = windows.children();
-        while(witr.has_next()){
-            conduit::Node &win_node = witr.next();
-            win_node["origin/k"]    = 0;
-            win_node["dims/k"]      = 1;
-            win_node["ratio/k"]     = 1;
+        // If this domain is already 3D, skip. We check if dims/k exists:
+        conduit::Node &coords = dom["coordsets/coords"];
+        if (coords.has_path("dims/k"))
+        {
+            // This domain is already 3D, no need to modify
+            continue;
         }
+
+        // At this point, we assume it's 2D and we want to add the dummy third dimension
+        // 1) Add dims/k = 2
+        coords["dims/k"] = (conduit::int32)2;
+
+        // 2) Add spacing/dz
+        coords["spacing/dz"] = 1.0;  // or your chosen dummy value
+
+        // 3) Add origin/z
+        coords["origin/z"] = 0.0;
+
+        // 4) Update the topology
+        if (dom.has_path("topologies/topo/elements/origin"))
+        {
+            conduit::Node &orig = dom["topologies/topo/elements/origin"];
+            // just set k0 = 0
+            orig["k0"] = (conduit::int32)0;
+        }
+
+        // 5) If nestsets exist, update them to reflect 3D
+        if (dom.has_path("nestsets/nest"))
+        {
+            conduit::Node &nest = dom["nestsets/nest"];
+            if (nest.has_path("windows"))
+            {
+                conduit::Node &windows = nest["windows"];
+                const std::vector<std::string> w_names = windows.child_names();
+                for (const auto &w : w_names)
+                {
+                    conduit::Node &wnd = windows[w];
+                    // add 'k' = 0, dims/k = 1, ratio/k = 1
+                    wnd["origin/k"] = 0;
+                    wnd["dims/k"]   = 1;
+                    wnd["ratio/k"]  = 1;
+                }
+            }
+        }
+        // Fields do not need changes:  Nx*Ny stays Nx*Ny for Nx*Ny*1 3D cells.
     }
 }
 
+
 void PeleLM::CatalystExecute () {
     amrex::Print() << "Running Catalyst pipeline scripts... \n";
-    BL_PROFILE("PeleLM::FillConduitNode()");
+    BL_PROFILE("PeleLM::CatalystExecute()");
     //----------------------------------------------------------------
     // Blueprint : Mesh data
     conduit::Node node;
@@ -460,9 +496,9 @@ void PeleLM::CatalystExecute () {
         Geom(), m_cur_time, level_steps, refRatio(), meshData);
     
     if (AMREX_SPACEDIM == 2) {
-        AddDummyZAxis(meshData);
+        //AddDummyZAxis(meshData);
     }
-
+    //node.print();
     // Catalyst Execute
     catalyst_status err = catalyst_execute(conduit::c_node(&node));
     if (err != catalyst_status_ok) {
@@ -471,6 +507,119 @@ void PeleLM::CatalystExecute () {
         amrex::Print() << message;
     }
 }
+
+void PeleLM::CatalystSteering() {
+
+    BL_PROFILE("PeleLM::CatalystSteering()");
+   const amrex::Real x_probe = (prob_parm->slot_width / 2.0) * 0.9;
+   const amrex::Real y_probe = prob_parm->wall_height;
+   bool foundCell = false;
+   amrex::Real localTemp = -9999.0;
+
+   for (int lev = finest_level-1; lev >=finest_level-1 ; --lev)
+{
+
+    const auto geomdata = geom[lev].data();
+    const amrex::Real* dx_lev = geomdata.CellSize();
+    const amrex::Real* plo_lev = geomdata.ProbLo();
+
+
+    int iWanted_lev = static_cast<int>((x_probe - plo_lev[0]) / dx_lev[0]);
+    int jWanted_lev = static_cast<int>((y_probe - plo_lev[1]) / dx_lev[1]);
+
+    amrex::IntVect iv_lev(AMREX_D_DECL(iWanted_lev, jWanted_lev, 0));
+
+
+    MultiFab& state_mf = m_leveldata_new[lev]->state;
+
+    for (amrex::MFIter mfi(state_mf); mfi.isValid(); ++mfi)
+    {
+        const amrex::Box& bx = mfi.validbox();
+        if (bx.contains(iv_lev))
+        {
+            auto const& arr = state_mf.const_array(mfi);
+            localTemp = arr(iWanted_lev, jWanted_lev, 0, TEMP);
+
+            foundCell = true;
+            break;
+        }
+    }
+    if (foundCell) {
+        break;
+    } 
+}
+    
+    // for (int lev = 0; lev <= finest_level; ++lev)
+    // {
+    //     int cnt = 0;
+
+    //     MultiFab::Copy(mf_plt[lev],
+    //                    m_leveldata_new[lev]->state,
+    //                    TEMP,   // srcComp
+    //                    cnt,    // destComp
+    //                    1,      // nComp
+    //                    0);     // nghost
+    //     cnt += 1;
+    // }
+
+    
+
+ 
+    // 2) Blueprint 
+    if(foundCell){
+        conduit::Node node;
+
+        auto & state = node["catalyst/state"];
+        state["timestep"].set(m_nstep);
+        state["time"].set(m_cur_time);
+
+        auto& meshChannel = node["catalyst/channels/mesh"];
+        meshChannel["type"].set_string("mesh");
+        auto& meshData = meshChannel["data"];
+        meshData["coordsets/coords/type"].set_string("explicit");
+        meshData["coordsets/coords/values/x"].set_float64_vector({ 1 });
+        meshData["coordsets/coords/values/y"].set_float64_vector({ 2 });
+        meshData["coordsets/coords/values/z"].set_float64_vector({ 3 });
+        meshData["topologies/mesh/type"].set("unstructured");
+        meshData["topologies/mesh/coordset"].set("coords");
+        meshData["topologies/mesh/elements/shape"].set("point");
+        meshData["topologies/mesh/elements/connectivity"].set_int32_vector({ 0 });
+        meshData["fields/temp/association"].set("vertex");
+        meshData["fields/temp/topology"].set("mesh");
+        meshData["fields/temp/volume_dependent"].set("false");
+        meshData["fields/temp/values"].set_float64_vector({localTemp});
+      
+
+
+        // fill steering node
+        auto &steerable  = node["catalyst/channels/steerable"];
+        steerable ["type"].set_string("mesh");
+        auto &steerable_data = steerable["data"];
+        steerable_data["coordsets/coords/type"].set_string("explicit");
+        steerable_data["coordsets/coords/values/x"].set_float64_vector({ 1 });
+        steerable_data["coordsets/coords/values/y"].set_float64_vector({ 2 });
+        steerable_data["coordsets/coords/values/z"].set_float64_vector({ 3 });
+        steerable_data["topologies/mesh/type"].set("unstructured");
+        steerable_data["topologies/mesh/coordset"].set("coords");
+        steerable_data["topologies/mesh/elements/shape"].set("point");
+        steerable_data["topologies/mesh/elements/connectivity"].set_int32_vector({ 0 });
+        steerable_data["fields/steerable/association"].set("vertex");
+        steerable_data["fields/steerable/topology"].set("mesh");
+        steerable_data["fields/steerable/volume_dependent"].set("false");
+        steerable_data["fields/steerable/values"].set_float64_vector({PeleLM::prob_parm->T_center,PeleLM::prob_parm->V_mean,PeleLM::prob_parm->phi});
+
+        catalyst_status err = catalyst_execute(conduit::c_node(&node));
+        if (err != catalyst_status_ok)
+        {
+            std::string message = " Error: Failed to execute Catalyst!\n";
+            std::cerr << message << err << std::endl;
+            amrex::Print() << message;
+            amrex::Abort(message);
+        } 
+    }
+    
+}
+
 
 void PeleLM::CatalystFinalize() {
     conduit::Node node;

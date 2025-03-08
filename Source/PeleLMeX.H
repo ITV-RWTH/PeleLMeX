@@ -162,6 +162,8 @@ public:
   // Convert 2D Conduit nodes to 3D
   void AddDummyZAxis(conduit::Node &meshData);
 
+  void CatalystSteering();
+
 #endif
   void Feedback();
   void Regler(double& T_center, double& T_coflow, double& V_mean, double& V_coflow, double& phi);
@@ -1023,6 +1025,8 @@ public:
   // In-Situ
   int do_inSitu_Visualization;
   int inSitu_plot_int; 
+  int do_inSitu_Steering;
+  int inSitu_Steering_int; 
    //-----------------------------------------------------------------------------
 
   //-----------------------------------------------------------------------------

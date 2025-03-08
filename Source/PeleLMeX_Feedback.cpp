@@ -23,11 +23,11 @@ PeleLM::Feedback()
         std::cerr << "Error: Control.inp can't be opened." << std::endl;
     }
 
-    controlFile << "prob.T_center "       << T_center       << "\n";
-    controlFile << "prob.T_coflow "       << T_coflow       << "\n";
-    controlFile << "prob.V_mean "         << V_mean         << "\n";
-    controlFile << "prob.V_coflow "       << V_coflow       << "\n";
-    controlFile << "prob.phi "            << phi            << "\n";
+    controlFile << "prob.T_center ="       << T_center       << "\n";
+    controlFile << "prob.T_coflow ="       << T_coflow       << "\n";
+    controlFile << "prob.V_mean ="         << V_mean         << "\n";
+    controlFile << "prob.V_coflow ="       << V_coflow       << "\n";
+    controlFile << "prob.phi ="            << phi            << "\n";
 
     controlFile.close();
 
