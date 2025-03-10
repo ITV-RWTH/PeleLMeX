@@ -164,7 +164,6 @@ public:
 
   void CatalystSteering();
 
-  void CatalystResult();
 
 #endif
   void Feedback();

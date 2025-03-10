@@ -92,7 +92,6 @@ PeleLM::Evolve()
   }
   if(do_inSitu_Steering && m_nstep%inSitu_Steering_int==0){
     CatalystSteering();
-    CatalystResult();
   }
 #endif
 

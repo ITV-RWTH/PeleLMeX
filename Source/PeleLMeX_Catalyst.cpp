@@ -556,7 +556,7 @@ void PeleLM::CatalystSteering() {
         }
     }
         if (foundCell) {
-            std::cout << "we found the cell" << std::endl;
+            std::cout << "we found the cell at Proc() " << ParallelDescriptor::MyProc() << std::endl;
             break;
         } 
     }
@@ -621,32 +621,69 @@ void PeleLM::CatalystSteering() {
         amrex::Print() << message;
         amrex::Abort(message);
     } 
-}
 
-    
+    conduit::Node result;
+    catalyst_status err_result = catalyst_results(conduit::c_node(&result));
 
 
-void PeleLM::CatalystResult() {
-    conduit::Node node;
-    //amrex::Print() << "catalyst result...\n";
-
-    catalyst_status err = catalyst_results(conduit::c_node(&node));
-
-    if (err != catalyst_status_ok)
+    if (err_result != catalyst_status_ok)
     {
-        std::cerr << "Failed to execute Catalyst-results: " << err << std::endl;
+        std::cerr << "Failed to execute Catalyst-results: " << err_result << std::endl;
     }
     else
     {
-        auto &timestep_node = node["catalyst/state/timestep"];
-        int timestep = timestep_node.to_int();
-        if(timestep != 0){
-            auto &results = node["catalyst/steerable/fields"];
-            error = results["error/values"].to_double();
-            integral = results["integral/values"].to_double();
-            PeleLM::prob_parm->V_mean = results["V_mean/values"].to_double();
-            //inSitu_Steering_int = m_nstep + static_cast<int>((PeleLM::prob_parm->wall_height/PeleLM::prob_parm->V_mean)/m_dt);
-            std::cout << "Next Time Step to steering is :" << inSitu_Steering_int ;
+        // if (foundCell) {
+        //     auto &fields = result["catalyst/steerable/fields"];
+        //     error = fields["error/values"].to_double();
+        //     integral = fields["integral/values"].to_double();
+        //     PeleLM::prob_parm->V_mean = fields["V_mean/values"].to_double();
+        //     inSitu_Steering_int = m_nstep + static_cast<int>((PeleLM::prob_parm->wall_height/PeleLM::prob_parm->V_mean)/m_dt);
+        //     std::cout << "Next Time Step to steering is :" << inSitu_Steering_int ;
+        //     result.print();
+        
+        // }
+        int localFlag   = (foundCell ? ParallelDescriptor::MyProc() : -1);
+        ParallelDescriptor::ReduceIntMax(localFlag);
+        int rootRank    = localFlag; 
+
+        double localError    = error;
+        double localIntegral = integral;
+        double localVmean    = PeleLM::prob_parm->V_mean;
+        int    localSteeringInt = inSitu_Steering_int;
+
+        if (rootRank != -1) {
+
+            if (ParallelDescriptor::MyProc() == rootRank)
+            {
+                auto &fields = result["catalyst/steerable/fields"];
+                localError    = fields["error/values"].to_double();
+                localIntegral = fields["integral/values"].to_double();
+                localVmean    = fields["V_mean/values"].to_double();
+                localSteeringInt = m_nstep + static_cast<int>(
+                                    (PeleLM::prob_parm->wall_height/localVmean)/m_dt
+                                );
+                
+                std::cout << "  error=" << localError 
+                      << ", integral=" << localIntegral
+                      << ", V_mean="  << localVmean
+                      << ", nextInSitu=" << localSteeringInt << std::endl;
+            }
+
+            ParallelDescriptor::Bcast(&localError,      1, rootRank);
+            ParallelDescriptor::Bcast(&localIntegral,   1, rootRank);
+            ParallelDescriptor::Bcast(&localVmean,      1, rootRank);
+            ParallelDescriptor::Bcast(&localSteeringInt,1, rootRank);
+
+            error                = localError;
+            integral             = localIntegral;
+            PeleLM::prob_parm->V_mean = localVmean;
+            //inSitu_Steering_int  = localSteeringInt;
+
+            amrex::Print() << "[rank " << ParallelDescriptor::MyProc()
+                       << "] error=" << error
+                       << ", integral=" << integral
+                       << ", V_mean=" << PeleLM::prob_parm->V_mean
+                       << ", dt=" << m_dt << "\n";
         }
     }
 }
