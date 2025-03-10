@@ -18,13 +18,19 @@
 #ifdef PELE_USE_CATALYST
 using namespace amrex;
 void PeleLM::CatalystInit() {
+    amrex::Print() << "Running Catalyst Initialize script...\n";
     ParmParse const pp_catalyst("catalyst");
     std::string scriptPaths;
     std::string implementation {"paraview"};
     std::string searchPaths;
+    std::string proxyPaths;
     pp_catalyst.query("script_paths", scriptPaths);
     pp_catalyst.query("implementation", implementation);
     pp_catalyst.query("implementation_search_paths", searchPaths);
+    pp_catalyst.query("proxy_paths", proxyPaths);
+    error = 0;
+    integral = 0;
+    
 
     conduit::Node node;
 
@@ -42,9 +48,14 @@ void PeleLM::CatalystInit() {
     }
     // Prevent empty end paths
     if (scriptPaths.length() != 0) {
-        node["catalyst/scripts/script" + std::to_string(scriptNumber)].set_string(scriptPaths);
+    //    node["catalyst/scripts/script" + std::to_string(scriptNumber)].set_string(scriptPaths);
+     node["catalyst/scripts/script"].set_string(scriptPaths);
     }
 
+    if (do_inSitu_Steering) {
+        node["catalyst/proxies/proxy"].set_string(proxyPaths);
+        amrex::Print() << "Proxy Path is : " << proxyPaths;
+    }
     node["catalyst_load/implementation"].set_string(implementation);
     node["catalyst_load/search_paths/" + implementation].set_string(searchPaths);
 
@@ -498,7 +509,6 @@ void PeleLM::CatalystExecute () {
     if (AMREX_SPACEDIM == 2) {
         //AddDummyZAxis(meshData);
     }
-    //node.print();
     // Catalyst Execute
     catalyst_status err = catalyst_execute(conduit::c_node(&node));
     if (err != catalyst_status_ok) {
@@ -511,13 +521,14 @@ void PeleLM::CatalystExecute () {
 void PeleLM::CatalystSteering() {
 
     BL_PROFILE("PeleLM::CatalystSteering()");
+    amrex::Print() << "running Catalyst Steering... \n"; 
+    bool foundCell = false;
    const amrex::Real x_probe = (prob_parm->slot_width / 2.0) * 0.9;
    const amrex::Real y_probe = prob_parm->wall_height;
-   bool foundCell = false;
    amrex::Real localTemp = -9999.0;
 
    for (int lev = finest_level-1; lev >=finest_level-1 ; --lev)
-{
+    {
 
     const auto geomdata = geom[lev].data();
     const amrex::Real* dx_lev = geomdata.CellSize();
@@ -544,81 +555,102 @@ void PeleLM::CatalystSteering() {
             break;
         }
     }
-    if (foundCell) {
-        break;
-    } 
-}
-    
-    // for (int lev = 0; lev <= finest_level; ++lev)
-    // {
-    //     int cnt = 0;
-
-    //     MultiFab::Copy(mf_plt[lev],
-    //                    m_leveldata_new[lev]->state,
-    //                    TEMP,   // srcComp
-    //                    cnt,    // destComp
-    //                    1,      // nComp
-    //                    0);     // nghost
-    //     cnt += 1;
-    // }
-
-    
-
- 
-    // 2) Blueprint 
-    if(foundCell){
-        conduit::Node node;
-
-        auto & state = node["catalyst/state"];
-        state["timestep"].set(m_nstep);
-        state["time"].set(m_cur_time);
-
-        auto& meshChannel = node["catalyst/channels/mesh"];
-        meshChannel["type"].set_string("mesh");
-        auto& meshData = meshChannel["data"];
-        meshData["coordsets/coords/type"].set_string("explicit");
-        meshData["coordsets/coords/values/x"].set_float64_vector({ 1 });
-        meshData["coordsets/coords/values/y"].set_float64_vector({ 2 });
-        meshData["coordsets/coords/values/z"].set_float64_vector({ 3 });
-        meshData["topologies/mesh/type"].set("unstructured");
-        meshData["topologies/mesh/coordset"].set("coords");
-        meshData["topologies/mesh/elements/shape"].set("point");
-        meshData["topologies/mesh/elements/connectivity"].set_int32_vector({ 0 });
-        meshData["fields/temp/association"].set("vertex");
-        meshData["fields/temp/topology"].set("mesh");
-        meshData["fields/temp/volume_dependent"].set("false");
-        meshData["fields/temp/values"].set_float64_vector({localTemp});
-      
-
-
-        // fill steering node
-        auto &steerable  = node["catalyst/channels/steerable"];
-        steerable ["type"].set_string("mesh");
-        auto &steerable_data = steerable["data"];
-        steerable_data["coordsets/coords/type"].set_string("explicit");
-        steerable_data["coordsets/coords/values/x"].set_float64_vector({ 1 });
-        steerable_data["coordsets/coords/values/y"].set_float64_vector({ 2 });
-        steerable_data["coordsets/coords/values/z"].set_float64_vector({ 3 });
-        steerable_data["topologies/mesh/type"].set("unstructured");
-        steerable_data["topologies/mesh/coordset"].set("coords");
-        steerable_data["topologies/mesh/elements/shape"].set("point");
-        steerable_data["topologies/mesh/elements/connectivity"].set_int32_vector({ 0 });
-        steerable_data["fields/steerable/association"].set("vertex");
-        steerable_data["fields/steerable/topology"].set("mesh");
-        steerable_data["fields/steerable/volume_dependent"].set("false");
-        steerable_data["fields/steerable/values"].set_float64_vector({PeleLM::prob_parm->T_center,PeleLM::prob_parm->V_mean,PeleLM::prob_parm->phi});
-
-        catalyst_status err = catalyst_execute(conduit::c_node(&node));
-        if (err != catalyst_status_ok)
-        {
-            std::string message = " Error: Failed to execute Catalyst!\n";
-            std::cerr << message << err << std::endl;
-            amrex::Print() << message;
-            amrex::Abort(message);
+        if (foundCell) {
+            std::cout << "we found the cell" << std::endl;
+            break;
         } 
     }
+ 
+    // 2) Blueprint 
+    conduit::Node node;
+    auto & state = node["catalyst/state"];
+    state["timestep"].set(m_nstep);
+    state["time"].set(m_cur_time);
+
+    // fill steering node
+    auto &steerable  = node["catalyst/channels/steerable"];
+    steerable ["type"].set_string("mesh");
+    auto &steerable_data = steerable["data"];
+    steerable_data["coordsets/coords/type"].set_string("explicit");
+    steerable_data["coordsets/coords/values/x"].set_float64_vector({ 1 });
+    steerable_data["coordsets/coords/values/y"].set_float64_vector({ 2 });
+    steerable_data["coordsets/coords/values/z"].set_float64_vector({ 3 });
+
+    steerable_data["topologies/mesh/type"].set("unstructured");
+    steerable_data["topologies/mesh/coordset"].set("coords");
+    steerable_data["topologies/mesh/elements/shape"].set("point");
+    steerable_data["topologies/mesh/elements/connectivity"].set_int32_vector({ 0 });
     
+    steerable_data["fields/T_center/association"].set("vertex");
+    steerable_data["fields/T_center/topology"].set("mesh");
+    steerable_data["fields/T_center/volume_dependent"].set("false");
+    steerable_data["fields/T_center/values"].set_float64_vector(
+        { PeleLM::prob_parm->T_center });
+
+    steerable_data["fields/V_mean/association"].set("vertex");
+    steerable_data["fields/V_mean/topology"].set("mesh");
+    steerable_data["fields/V_mean/volume_dependent"].set("false");
+    steerable_data["fields/V_mean/values"].set_float64_vector(
+        { PeleLM::prob_parm->V_mean });
+
+    steerable_data["fields/phi/association"].set("vertex");
+    steerable_data["fields/phi/topology"].set("mesh");
+    steerable_data["fields/phi/volume_dependent"].set("false");
+    steerable_data["fields/phi/values"].set_float64_vector({ PeleLM::prob_parm->phi });
+
+    steerable_data["fields/error/association"].set("vertex");
+    steerable_data["fields/error/topology"].set("mesh");
+    steerable_data["fields/error/volume_dependent"].set("false");
+    steerable_data["fields/error/values"].set_float64_vector({ error });
+
+    steerable_data["fields/integral/association"].set("vertex");
+    steerable_data["fields/integral/topology"].set("mesh");
+    steerable_data["fields/integral/volume_dependent"].set("false");
+    steerable_data["fields/integral/values"].set_float64_vector({ integral });
+
+    steerable_data["fields/temperature/association"].set("vertex");
+    steerable_data["fields/temperature/topology"].set("mesh");
+    steerable_data["fields/temperature/volume_dependent"].set("false");
+    steerable_data["fields/temperature/values"].set_float64_vector({ localTemp });
+
+    catalyst_status err = catalyst_execute(conduit::c_node(&node));
+    if (err != catalyst_status_ok)
+    {
+        std::string message = " Error: Failed to execute Catalyst!\n";
+        std::cerr << message << err << std::endl;
+        amrex::Print() << message;
+        amrex::Abort(message);
+    } 
 }
+
+    
+
+
+void PeleLM::CatalystResult() {
+    conduit::Node node;
+    //amrex::Print() << "catalyst result...\n";
+
+    catalyst_status err = catalyst_results(conduit::c_node(&node));
+
+    if (err != catalyst_status_ok)
+    {
+        std::cerr << "Failed to execute Catalyst-results: " << err << std::endl;
+    }
+    else
+    {
+        auto &timestep_node = node["catalyst/state/timestep"];
+        int timestep = timestep_node.to_int();
+        if(timestep != 0){
+            auto &results = node["catalyst/steerable/fields"];
+            error = results["error/values"].to_double();
+            integral = results["integral/values"].to_double();
+            PeleLM::prob_parm->V_mean = results["V_mean/values"].to_double();
+            //inSitu_Steering_int = m_nstep + static_cast<int>((PeleLM::prob_parm->wall_height/PeleLM::prob_parm->V_mean)/m_dt);
+            std::cout << "Next Time Step to steering is :" << inSitu_Steering_int ;
+        }
+    }
+}
+    
 
 
 void PeleLM::CatalystFinalize() {
