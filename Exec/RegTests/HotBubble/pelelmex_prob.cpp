@@ -22,3 +22,17 @@ PeleLM::readProbParm() // NOLINT(readability-make-member-function-const)
   pp.query("const_diffusivity", trans_parm.const_diffusivity);
   PeleLM::trans_parms.sync_to_device();
 }
+
+void
+PeleLM::updateProbParm()
+{
+  amrex::ParmParse pp("prob");
+  pp.addfile("Control.inp");
+
+  pp.query("T_center", PeleLM::prob_parm->T_center); 
+  pp.query("T_coflow", PeleLM::prob_parm->T_coflow);
+  pp.query("V_mean", PeleLM::prob_parm->V_mean);
+  pp.query("V_coflow", PeleLM::prob_parm->V_coflow);
+  pp.query("phi", PeleLM::prob_parm->phi);
+
+}

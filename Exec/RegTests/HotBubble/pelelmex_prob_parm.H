@@ -14,5 +14,14 @@ struct ProbParm
   amrex::Real bubble_y0 = 0.01;
   int bubble_is_mix = 0;
   int is_sym = 0;
+  amrex::Real T_center = 298.0_rt;
+  amrex::Real T_coflow = 298.0_rt;
+  amrex::Real T_wall = 298.0_rt;
+  amrex::Real V_mean = 1.0_rt;
+  amrex::Real V_coflow = 1.0_rt;
+  amrex::Real phi = 1.0_rt;
+  amrex::Real slot_width = 0.01_rt;
+  amrex::Real wall_thickness =  slot_width / 10.0_rt;
+  amrex::Real wall_height = slot_width;
 };
 #endif

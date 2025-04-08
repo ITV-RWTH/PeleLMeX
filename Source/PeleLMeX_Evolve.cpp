@@ -86,15 +86,6 @@ PeleLM::Evolve()
     // Diagnostics
     doDiagnostics();
 
-#ifdef PELE_USE_CATALYST
-  if(do_inSitu_Visualization && m_nstep%inSitu_plot_int==0){
-    CatalystExecute();
-  }
-  if(do_inSitu_Steering && m_nstep%inSitu_Steering_int==0){
-    CatalystSteering();
-  }
-#endif
-
     // Check message
     bool dump_and_stop = checkMessage("dump_and_stop");
     bool plt_and_continue = checkMessage("plt_and_continue");
@@ -110,6 +101,15 @@ PeleLM::Evolve()
       WriteCheckPointFile();
       chk_justDidIt = 1;
     }
+
+  #ifdef PELE_USE_CATALYST
+  if(do_inSitu_Visualization && m_nstep%inSitu_plot_int==0){
+    CatalystExecute();
+  }
+  if(do_inSitu_Steering && m_nstep%inSitu_Steering_int==0){
+    CatalystSteering();
+  }
+  #endif
 
     // Check for the end of the simulation
     bool over_max_wall_time = false;

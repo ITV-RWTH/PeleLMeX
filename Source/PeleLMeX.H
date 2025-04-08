@@ -164,6 +164,9 @@ public:
 
   void CatalystSteering();
 
+  void compute_local_phi(std::vector<double> phi);
+
+  void EmptyFieldData(const std::vector<std::string>& field_names, conduit::Node& node);
 
 #endif
   void Feedback();
@@ -1030,6 +1033,10 @@ public:
   int inSitu_Steering_int; 
   double error;
   double integral;
+  double max_temp;
+  double prev_steering_time;
+  double steering_dt;
+  std::vector<double> phiSteering;
    //-----------------------------------------------------------------------------
 
   //-----------------------------------------------------------------------------

@@ -7,9 +7,8 @@
 #include <AMReX_REAL.H>
 #include <AMReX_Geometry.H>
 #include <AMReX_Vector.H>
-
+#include <array>
 #include <string>
-
 #ifdef PELE_USE_CATALYST
 #include <catalyst.hpp>
 #include <conduit_cpp_to_c.hpp>
@@ -30,7 +29,12 @@ void PeleLM::CatalystInit() {
     pp_catalyst.query("proxy_paths", proxyPaths);
     error = 0;
     integral = 0;
-    
+    steering_dt = 0;
+    prev_steering_time = 0;
+    max_temp = 0;
+    for(int i=0;i<3;i++){
+          phiSteering.push_back(1);
+    }
 
     conduit::Node node;
 
@@ -78,28 +82,18 @@ void PeleLM::AddDummyZAxis (conduit::Node &mesh_data) {
     {
         conduit::Node &dom = mesh_data[dom_name];
 
-        // Look for a uniform coordset at dom["coordsets/coords"]
-        if (!dom.has_path("coordsets/coords/type")) continue;
-        if (std::string(dom["coordsets/coords/type"].as_string()) != "uniform")
-            continue;
-
         // If this domain is already 3D, skip. We check if dims/k exists:
         conduit::Node &coords = dom["coordsets/coords"];
-        if (coords.has_path("dims/k"))
-        {
-            // This domain is already 3D, no need to modify
-            continue;
-        }
 
         // At this point, we assume it's 2D and we want to add the dummy third dimension
         // 1) Add dims/k = 2
-        coords["dims/k"] = (conduit::int32)2;
+        coords["dims/k"] = 0;
 
         // 2) Add spacing/dz
-        coords["spacing/dz"] = 1.0;  // or your chosen dummy value
+        coords["spacing/dz"] = 0;  // or your chosen dummy value
 
         // 3) Add origin/z
-        coords["origin/z"] = 0.0;
+        coords["origin/z"] = 0;
 
         // 4) Update the topology
         if (dom.has_path("topologies/topo/elements/origin"))
@@ -122,8 +116,8 @@ void PeleLM::AddDummyZAxis (conduit::Node &mesh_data) {
                     conduit::Node &wnd = windows[w];
                     // add 'k' = 0, dims/k = 1, ratio/k = 1
                     wnd["origin/k"] = 0;
-                    wnd["dims/k"]   = 1;
-                    wnd["ratio/k"]  = 1;
+                    wnd["dims/k"]   = 0;
+                    wnd["ratio/k"]  = 0;
                 }
             }
         }
@@ -131,6 +125,52 @@ void PeleLM::AddDummyZAxis (conduit::Node &mesh_data) {
     }
 }
 
+void PeleLM::EmptyFieldData(const std::vector<std::string>& field_names, conduit::Node& node){
+    const std::string domain_name = amrex::Concatenate("domain_", 0, 6);
+    conduit::Node &dom = node[domain_name];
+
+    dom["state/domain_id"] = 0;
+    dom["state/cycle"] = 0;
+    dom["state/time"] = 0;
+    dom["state/level"] = 0;
+
+    dom["coordsets/coords/type"] = "uniform";
+    dom["coordsets/coords/dims/i"] = 0;
+    dom["coordsets/coords/dims/j"] = 0;
+    if(BL_SPACEDIM > 2){
+        dom["coordsets/coords/dims/k"] = 0;
+    }
+
+    dom["coordsets/coords/spacing/dx"] = 0;
+    dom["coordsets/coords/spacing/dy"] = 0;
+    if(BL_SPACEDIM > 2){
+        dom["coordsets/coords/spacing/dz"] = 0;
+    }
+
+
+    dom["coordsets/coords/origin/x"] = 0;
+    dom["coordsets/coords/origin/y"] = 0;
+    if(BL_SPACEDIM > 2){
+        dom["coordsets/coords/origin/z"] = 0;
+    }
+
+    dom["topologies/topo/coordset"] = "coords";
+    dom["topologies/topo/type"]     = "uniform";
+    dom["topologies/topo/elements/origin/i0"] = 0;
+    dom["topologies/topo/elements/origin/j0"] = 0;
+     if(BL_SPACEDIM > 2){
+        dom["topologies/topo/elements/origin/k0"] = 0;
+    }
+
+    auto &fields = dom["fields"]; 
+    for(auto &fname : field_names){
+        auto &fnode = fields[fname];
+
+        fnode["association"] = "element";
+        fnode["topology"] = "topo";
+        fnode["values"].set(conduit::DataType::c_double(0));
+    }
+}
 
 void PeleLM::CatalystExecute () {
     amrex::Print() << "Running Catalyst pipeline scripts... \n";
@@ -223,12 +263,15 @@ void PeleLM::CatalystExecute () {
   }
 
     Vector<MultiFab> mf_plt(finest_level + 1);
+    Vector<int> level_steps(finest_level + 1);
+
     for (int lev = 0; lev <= finest_level; ++lev) {
         mf_plt[lev].define(grids[lev], dmap[lev], ncomp, 0, MFInfo(), Factory(lev));
+        level_steps[lev] = m_nstep;
     }
     // Blueprint : fill the multifabs
-    for (int lev = 0; lev <= finest_level; ++lev) {
-        int cnt = 0;
+for (int lev = 0; lev <= finest_level; ++lev) {
+    int cnt = 0;
     if (m_incompressible != 0) {
         MultiFab::Copy(
         mf_plt[lev], m_leveldata_new[lev]->state, 0, cnt, AMREX_SPACEDIM, 0);
@@ -345,7 +388,7 @@ void PeleLM::CatalystExecute () {
         cnt += m_ionsFluxes[lev]->nComp();
     }
 #endif
-    #if NUM_ODE > 0
+#if NUM_ODE > 0
     MultiFab::Copy(
         mf_plt[lev], m_leveldata_new[lev]->state, FIRSTODE, cnt, NUM_ODE, 0);
     cnt += NUM_ODE;
@@ -500,23 +543,46 @@ void PeleLM::CatalystExecute () {
 
     //----------------------------------------------------------------
     // Blueprint : level 
-    Vector<int> level_steps(1,m_nstep);
+    //Vector<int> level_steps(1,m_nstep);
 
     amrex::MultiLevelToBlueprint(
         finest_level + 1, amrex::GetVecOfConstPtrs(mf_plt), plt_VarsName, 
         Geom(), m_cur_time, level_steps, refRatio(), meshData);
     
-    if (AMREX_SPACEDIM == 2) {
-        //AddDummyZAxis(meshData);
+    
+    auto& root = node["catalyst/channels/mesh/data"];
+
+    if(!root.dtype().is_object())
+    {
+        EmptyFieldData(plt_VarsName, root);
     }
+
+
+    // if(AMREX_SPACEDIM>2){
+    //     AddDummyZAxis(root);
+    // }
+    
+
+
     // Catalyst Execute
+    std::string anyname = "anyname";
+    BL_PROFILE_VAR("catalyst_execute", anyname);
     catalyst_status err = catalyst_execute(conduit::c_node(&node));
+    BL_PROFILE_VAR_STOP(anyname);
+
     if (err != catalyst_status_ok) {
         std::string message = " Error: Failed to execute Catalyst!\n";
         std::cerr << message << err << std::endl;
         amrex::Print() << message;
     }
+    else{
+        amrex::Print() << "Succesfully execute the catalyst \n";
+    }
 }
+
+void PeleLM::compute_local_phi(std::vector<double> phi){
+}
+
 
 void PeleLM::CatalystSteering() {
 
@@ -560,6 +626,13 @@ void PeleLM::CatalystSteering() {
             break;
         } 
     }
+
+    if(prev_steering_time == 0) {
+        steering_dt = 0;
+    }
+    else {
+        steering_dt = m_cur_time - prev_steering_time;
+    }
  
     // 2) Blueprint 
     conduit::Node node;
@@ -567,14 +640,16 @@ void PeleLM::CatalystSteering() {
     state["timestep"].set(m_nstep);
     state["time"].set(m_cur_time);
 
+    // fill  node
+
     // fill steering node
     auto &steerable  = node["catalyst/channels/steerable"];
     steerable ["type"].set_string("mesh");
     auto &steerable_data = steerable["data"];
     steerable_data["coordsets/coords/type"].set_string("explicit");
-    steerable_data["coordsets/coords/values/x"].set_float64_vector({ 1 });
-    steerable_data["coordsets/coords/values/y"].set_float64_vector({ 2 });
-    steerable_data["coordsets/coords/values/z"].set_float64_vector({ 3 });
+    steerable_data["coordsets/coords/values/x"].set_float64_vector({ phiSteering[0] });
+    steerable_data["coordsets/coords/values/y"].set_float64_vector({ phiSteering[1] });
+    steerable_data["coordsets/coords/values/z"].set_float64_vector({ phiSteering[2] });
 
     steerable_data["topologies/mesh/type"].set("unstructured");
     steerable_data["topologies/mesh/coordset"].set("coords");
@@ -587,17 +662,12 @@ void PeleLM::CatalystSteering() {
     steerable_data["fields/T_center/values"].set_float64_vector(
         { PeleLM::prob_parm->T_center });
 
-    steerable_data["fields/V_mean/association"].set("vertex");
-    steerable_data["fields/V_mean/topology"].set("mesh");
-    steerable_data["fields/V_mean/volume_dependent"].set("false");
-    steerable_data["fields/V_mean/values"].set_float64_vector(
-        { PeleLM::prob_parm->V_mean });
+    // steerable_data["fields/V_mean/association"].set("vertex");
+    // steerable_data["fields/V_mean/topology"].set("mesh");
+    // steerable_data["fields/V_mean/values"].set_float64_vector(
+    //     { PeleLM::prob_parm->V_mean });
 
-    steerable_data["fields/phi/association"].set("vertex");
-    steerable_data["fields/phi/topology"].set("mesh");
-    steerable_data["fields/phi/volume_dependent"].set("false");
-    steerable_data["fields/phi/values"].set_float64_vector({ PeleLM::prob_parm->phi });
-
+    
     steerable_data["fields/error/association"].set("vertex");
     steerable_data["fields/error/topology"].set("mesh");
     steerable_data["fields/error/volume_dependent"].set("false");
@@ -613,6 +683,78 @@ void PeleLM::CatalystSteering() {
     steerable_data["fields/temperature/volume_dependent"].set("false");
     steerable_data["fields/temperature/values"].set_float64_vector({ localTemp });
 
+    steerable_data["fields/steering_dt/association"].set("vertex");
+    steerable_data["fields/steering_dt/topology"].set("mesh");
+    steerable_data["fields/steering_dt/volume_dependent"].set("false");
+    steerable_data["fields/steering_dt/values"].set_float64_vector({ steering_dt });
+
+    steerable_data["fields/max_temp/association"].set("vertex");
+    steerable_data["fields/max_temp/topology"].set("mesh");
+    steerable_data["fields/max_temp/volume_dependent"].set("false");
+    steerable_data["fields/max_temp/values"].set_float64_vector({ localTemp });
+
+    steerable_data["fields/phi_global/association"].set("vertex");
+    steerable_data["fields/phi_global/topology"].set("mesh");
+    steerable_data["fields/phi_global/volume_dependent"].set("false");
+    steerable_data["fields/phi_global/values"].set_float64_vector({ PeleLM::prob_parm->phi });
+
+
+    // for visualization && find maximum temperature
+
+    auto& meshChannel = node["catalyst/channels/mesh"];
+    meshChannel["type"].set_string("amrmesh");
+    auto& meshData = meshChannel["data"];
+
+    
+    Vector<MultiFab*> mf_plt(finest_level + 1);
+    Vector<int> level_steps(finest_level + 1);
+    Vector<std::string> plt_VarsName;
+
+    //plt_VarsName.push_back("temp");
+    plt_VarsName.push_back("HR");
+
+    // Blueprint : fill the multifabs
+    for (int lev = 0; lev <= finest_level; ++lev) {
+
+        level_steps[lev] = m_nstep;
+
+        mf_plt[lev] = new MultiFab(grids[lev], dmap[lev], 1, 0, MFInfo(), Factory(lev));
+    
+        //MultiFab::Copy(*mf_plt[lev], m_leveldata_new[lev]->state, TEMP, 0, 1, 0);
+
+        if (m_plotHeatRelease != 0) {
+            std::unique_ptr<MultiFab> mf;
+            mf = std::make_unique<MultiFab>(grids[lev], dmap[lev], 1, 0);
+            getHeatRelease(lev, mf.get());
+            MultiFab::Copy(*mf_plt[lev], *mf, 0, 0, 1, 0);
+        }
+        //amrex::EB_set_covered(*mf_plt[lev], 0.0);
+    }
+
+    amrex::MultiLevelToBlueprint(
+    finest_level + 1, amrex::GetVecOfConstPtrs(mf_plt), plt_VarsName, 
+    Geom(), m_cur_time, level_steps, refRatio(), meshData);
+    
+    auto& root = node["catalyst/channels/mesh/data"];
+
+    if (!root.dtype().is_object())
+    {
+       //EmptyFieldData(plt_VarsName, root);
+       catalyst_execute();
+    }
+
+    
+    if(AMREX_SPACEDIM<3){
+        AddDummyZAxis(root);
+    }
+
+    if(ParallelDescriptor::IOProcessor()){
+        node.print();
+
+    }
+
+    //amrex::Abort("just stop here");
+
     catalyst_status err = catalyst_execute(conduit::c_node(&node));
     if (err != catalyst_status_ok)
     {
@@ -621,71 +763,96 @@ void PeleLM::CatalystSteering() {
         amrex::Print() << message;
         amrex::Abort(message);
     } 
+    else{
+        amrex::Print() << "Succesfully execute the catalyst \n";
+    }
+    
+    for (int lev = 0; lev <= finest_level; ++lev) {
+        delete mf_plt[lev];
+    }
 
     conduit::Node result;
     catalyst_status err_result = catalyst_results(conduit::c_node(&result));
-
-
     if (err_result != catalyst_status_ok)
     {
         std::cerr << "Failed to execute Catalyst-results: " << err_result << std::endl;
     }
     else
     {
-        // if (foundCell) {
-        //     auto &fields = result["catalyst/steerable/fields"];
-        //     error = fields["error/values"].to_double();
-        //     integral = fields["integral/values"].to_double();
-        //     PeleLM::prob_parm->V_mean = fields["V_mean/values"].to_double();
-        //     inSitu_Steering_int = m_nstep + static_cast<int>((PeleLM::prob_parm->wall_height/PeleLM::prob_parm->V_mean)/m_dt);
-        //     std::cout << "Next Time Step to steering is :" << inSitu_Steering_int ;
-        //     result.print();
-        
-        // }
         int localFlag   = (foundCell ? ParallelDescriptor::MyProc() : -1);
         ParallelDescriptor::ReduceIntMax(localFlag);
         int rootRank    = localFlag; 
 
-        double localError    = error;
-        double localIntegral = integral;
-        double localVmean    = PeleLM::prob_parm->V_mean;
-        int    localSteeringInt = inSitu_Steering_int;
+        double localError           = error;
+        double localIntegral        = integral;
+        //double localVmean           = PeleLM::prob_parm->V_mean;    
+        std::array<double,3> localPhi;
+        for(int i = 0 ; i <3; i ++) {
+            localPhi[i] = phiSteering[i];
+        }
+        //double localTcenter         = PeleLM::prob_parm->T_center;
+        int    localSteeringInt     = inSitu_Steering_int;
+        double localmaxTemp         = max_temp;
+
+        if (ParallelDescriptor::MyProc() == rootRank){
+        }
 
         if (rootRank != -1) {
 
             if (ParallelDescriptor::MyProc() == rootRank)
             {
-                auto &fields = result["catalyst/steerable/fields"];
+                auto &fields  = result["catalyst/steerable/fields"];
                 localError    = fields["error/values"].to_double();
                 localIntegral = fields["integral/values"].to_double();
-                localVmean    = fields["V_mean/values"].to_double();
-                localSteeringInt = m_nstep + static_cast<int>(
-                                    (PeleLM::prob_parm->wall_height/localVmean)/m_dt
-                                );
-                
-                std::cout << "  error=" << localError 
-                      << ", integral=" << localIntegral
-                      << ", V_mean="  << localVmean
-                      << ", nextInSitu=" << localSteeringInt << std::endl;
+                //localVmean    = fields["V_mean/values"].to_double();
+                localPhi[0]   = fields["coords/values/0"].to_double();
+                localPhi[1]   = fields["coords/values/1"].to_double();
+                localPhi[2]   = fields["coords/values/2"].to_double();
+                //localTcenter  = fields["T_center/values"].to_double();
+                // localSteeringInt = m_nstep + static_cast<int>(
+                //                     (y_probe/PeleLM::prob_parm->V_mean)/m_dt*5
+                //                 );
+                localSteeringInt = 1;
+                localmaxTemp  = fields["max_temp/values"].to_double();
             }
 
             ParallelDescriptor::Bcast(&localError,      1, rootRank);
             ParallelDescriptor::Bcast(&localIntegral,   1, rootRank);
-            ParallelDescriptor::Bcast(&localVmean,      1, rootRank);
+            //ParallelDescriptor::Bcast(&localVmean,      1, rootRank);
+            ParallelDescriptor::Bcast(localPhi.data(),  3, rootRank);
+            //ParallelDescriptor::Bcast(&localTcenter,    1, rootRank);
             ParallelDescriptor::Bcast(&localSteeringInt,1, rootRank);
+            ParallelDescriptor::Bcast(&localmaxTemp,1, rootRank);
 
-            error                = localError;
-            integral             = localIntegral;
-            PeleLM::prob_parm->V_mean = localVmean;
-            //inSitu_Steering_int  = localSteeringInt;
+            error                          = localError;
+            integral                       = localIntegral;
+            //PeleLM::prob_parm->V_mean      = localVmean;
+            //PeleLM::prob_parm->T_center    = localTcenter;
+            for(int i = 0 ; i <3; i ++) {
+                phiSteering[i] = localPhi[i];
+            }
+            inSitu_Steering_int            = localSteeringInt;
+            max_temp                       = localmaxTemp;
+
+            compute_local_phi(phiSteering);
 
             amrex::Print() << "[rank " << ParallelDescriptor::MyProc()
                        << "] error=" << error
                        << ", integral=" << integral
-                       << ", V_mean=" << PeleLM::prob_parm->V_mean
-                       << ", dt=" << m_dt << "\n";
+                //       << ", V_mean=" << PeleLM::prob_parm->V_mean
+                //       << ", T_center=" << PeleLM::prob_parm->T_center
+                       << ", Phi(x) coefficient =" << phiSteering[0] << " " <<  phiSteering[1] << " " <<  phiSteering[2]
+                       << ", Steering_dt=" << steering_dt
+                       << ", inSitu_Steering_int=" << inSitu_Steering_int
+                       << ", max temp =" << max_temp
+                       << "\n";
+            
+    
+            Gpu::copy(Gpu::hostToDevice, prob_parm, prob_parm + 1, prob_parm_d);
         }
     }
+
+    prev_steering_time = m_cur_time;
 }
     
 
@@ -700,7 +867,7 @@ void PeleLM::CatalystFinalize() {
         amrex::Print() << message;
         amrex::Abort(message);
     } else {
-        std::cout << "Successfully finalized Catalyst\n";
+        amrex::Print() << "Successfully finalized Catalyst\n";
     }
 }
 #endif
