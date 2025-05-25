@@ -322,7 +322,8 @@ PeleLM::calcDiffusivity(const TimeStamp& a_time)
           i, j, k, do_fixed_Le, do_fixed_Pr, do_soret, Le_inv, Pr_inv,
           Array4<Real const>(sma[box_no], FIRSTSPEC),
           Array4<Real const>(sma[box_no], TEMP), Array4<Real>(dma[box_no], 0),
-          Array4<Real>(dma[box_no], NUM_SPECIES + 1 + soret_idx),
+          Array4<Real>(dma[box_no], NUM_SPECIES + 1 + soret_idx), // justin this is theta?
+          // das ist ein slice von NUM_SPECIES + 2 bis ende 
           Array4<Real>(dma[box_no], NUM_SPECIES),
           Array4<Real>(dma[box_no], NUM_SPECIES + 1), ltransparm, leosparm);
 #ifdef PELE_USE_EFIELD

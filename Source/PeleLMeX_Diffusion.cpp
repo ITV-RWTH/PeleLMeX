@@ -73,6 +73,7 @@ PeleLM::computeDifferentialDiffusionTerms(
       fluxes[lev][idim].define(
         amrex::convert(ba, IntVect::TheDimensionVector(idim)), dmap[lev],
         NUM_SPECIES + 2, nGrow, MFInfo(), factory);
+      // justin : this seems like its a little too big NUM_LITE_SPECIES
     }
   }
 #ifdef AMREX_USE_EB
@@ -97,6 +98,7 @@ PeleLM::computeDifferentialDiffusionTerms(
     ((is_init != 0) || (m_use_soret == 0))
       ? Vector<std::array<MultiFab*, AMREX_SPACEDIM>>{}
       : GetVecOfArrOfPtrs(diffData->soret_fluxes);
+  // justin : change size of both
 
 #ifdef AMREX_USE_EB
   if (m_isothermalEB != 0) {
@@ -343,6 +345,7 @@ PeleLM::correctIsothermalBoundary(
       for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
         soretfluxes[lev][idim] = new MultiFab(
           grids[lev], dmap[lev], NUM_SPECIES, 1, MFInfo(), Factory(lev));
+        // justin : should these things change as well?
         soretfluxes[lev][idim]->setVal(0.0);
       }
     }
@@ -523,6 +526,8 @@ PeleLM::computeDifferentialDiffusionFluxes(
       addSoretTerm(
         a_fluxes, a_soretfluxes, GetVecOfConstPtrs(getTempVect(a_time)),
         GetVecOfConstPtrs(getDiffusivityVect(a_time)));
+      // justin : hier wird unterschieden und wenn true = dann wird
+      // a_soretfluxes mit gegeben
     }
   }
 
@@ -819,7 +824,7 @@ PeleLM::addSoretTerm(
     int doZeroVisc = 1;
     Array<MultiFab, AMREX_SPACEDIM> beta_ec = getDiffusivity(
       lev, NUM_SPECIES + 2, NUM_SPECIES, doZeroVisc, bcRecSpec, *a_beta[lev]);
-
+    // justin : NUM_SPECIES + 2 = beta_comp, NUM_SPECIES = ncomp
     const Box& domain = geom[lev].Domain();
     bool use_harmonic_avg = m_harm_avg_cen2edge != 0;
 
@@ -862,6 +867,7 @@ PeleLM::addSoretTerm(
           auto const& T = T_ed.const_array(0);
           auto const& gradT_ar = gradT[lev][idim].const_array(mfi);
           auto const& beta_ar = beta_ec[idim].const_array(mfi);
+          // justin beta_ar is the one giving your the flux
           auto const& spFlux_ar = a_spfluxes[lev][idim]->array(mfi);
           auto const& spsoretFlux_ar =
             (need_soret_fluxes) != 0
@@ -884,6 +890,8 @@ PeleLM::addSoretTerm(
                   spsoretFlux_ar(i, j, k, n) =
                     -beta_ar(i, j, k, n) * gradT_ar(i, j, k) / T(i, j, k);
                 }
+                // justin : I think this is for boundary conditionds and should
+                // be unchanged
               }
             });
         }
@@ -1168,6 +1176,8 @@ PeleLM::differentialDiffusionUpdate(
             [flux_spec,
              flux_soret] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
               flux_spec(i, j, k, n) += flux_soret(i, j, k, n);
+              // justin : here we use the rhotheta
+              // Adding the Soret to the normal Flux 
             });
         }
       }
@@ -1724,9 +1734,9 @@ PeleLM::getDiffusionTensorOpBC(
   Vector<Array<LinOpBCType, AMREX_SPACEDIM>> r(AMREX_SPACEDIM);
   for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
     if (Geom(0).isPeriodic(idim)) {
-      AMREX_D_TERM(r[0][idim] = LinOpBCType::Periodic;
-                   , r[1][idim] = LinOpBCType::Periodic;
-                   , r[2][idim] = LinOpBCType::Periodic;);
+      AMREX_D_TERM(
+        r[0][idim] = LinOpBCType::Periodic;, r[1][idim] = LinOpBCType::Periodic;
+        , r[2][idim] = LinOpBCType::Periodic;);
     } else {
       for (int dir = 0; dir < AMREX_SPACEDIM; dir++) {
         auto amrexbc = (a_side == Orientation::low) ? a_bc[dir].lo(idim)

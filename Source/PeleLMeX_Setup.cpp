@@ -1079,6 +1079,7 @@ PeleLM::derivedSetup()
       var_names_massfrac, pelelmex_dermolefrac, the_same_box);
 
     // Species diffusion coefficients
+    // justin, hi please understand this thanks
     for (int n = 0; n < NUM_SPECIES; n++) {
       var_names_massfrac[n] = "D_" + spec_names[n];
     }
@@ -1093,7 +1094,7 @@ PeleLM::derivedSetup()
     } else {
       derive_lst.add(
         "diffcoeff", IndexType::TheCellType(), NUM_SPECIES, var_names_massfrac,
-        pelelmex_derdiffc, the_same_box);
+        pelelmex_derdiffc, the_same_box); // justin ask about this
     }
 
     // Rho - sum rhoYs

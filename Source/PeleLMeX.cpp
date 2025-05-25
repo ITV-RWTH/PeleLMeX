@@ -238,6 +238,7 @@ PeleLM::getDiffusivityVect(const TimeStamp& a_time)
   if (a_time == AmrOldTime) {
     for (int lev = 0; lev <= finest_level; ++lev) {
       r.push_back(&(m_leveldata_old[lev]->diff_cc));
+      // justin YIPPIE IT DOES WOHOOO
     }
   } else {
     for (int lev = 0; lev <= finest_level; ++lev) {

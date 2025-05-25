@@ -21,7 +21,8 @@ getTransportCoeff(
   amrex::Array4<const amrex::Real> const& rhoY,
   amrex::Array4<const amrex::Real> const& T,
   amrex::Array4<amrex::Real> const& rhoDi,
-  amrex::Array4<amrex::Real> const& rhotheta,
+  amrex::Array4<amrex::Real> const& rhotheta, // 12 justin I just realized that this is a function signature taking in a 
+  //reference of rhothea, find out. where this is used
   amrex::Array4<amrex::Real> const& lambda,
   amrex::Array4<amrex::Real> const& mu,
   pele::physics::transport::TransParm<
@@ -99,6 +100,7 @@ getTransportCoeff(
       rhoDi(i, j, k, n) = rhoDi_cgs[n] * Wbar * mwtinv[n] * 1.0e-1_rt;
       if (do_soret) {
         rhotheta(i, j, k, n) = -rhoDi_cgs[n] * 1.0e-1_rt * chi_loc[n];
+        // justin here is the actual calculation
       }
     }
     if (do_soret) {
@@ -107,9 +109,11 @@ getTransportCoeff(
     H_ID) // Soret coefficient scaling, see Howarth, Day, Pitsch & Aspden
       rhotheta(i, j, k, H2_ID) *= 0.664;
       rhotheta(i, j, k, H_ID) *= 0.58;
+      // das musst du auch verändern, the H2_ID will change withing the list, which will make it a lil more complicated
 #else
       amrex::Abort("Running with Soret without light species, waste of time "
-                   "and memory...");
+                   "and memory..."
+                   "you should feel ashamed"); 
 #endif
     }
   }

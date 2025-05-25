@@ -1359,7 +1359,7 @@ pelelmex_derdiffc(
   AMREX_ASSERT(statefab.box().contains(bx));
   AMREX_ASSERT(derfab.nComp() >= dcomp + ncomp);
   if (a_pelelm->m_use_soret != 0) {
-    AMREX_ASSERT(ncomp == 2 * NUM_SPECIES);
+    AMREX_ASSERT(ncomp == 2 * NUM_SPECIES); //justin ncomp == NUM_SPECIES + NUM_LITE_SPECIES?
   }
   if (a_pelelm->m_use_soret == 0) {
     AMREX_ASSERT(ncomp == NUM_SPECIES);
@@ -1377,6 +1377,8 @@ pelelmex_derdiffc(
   auto const* leosparm = a_pelelm->eos_parms.device_parm();
   auto rhotheta = do_soret ? derfab.array(dcomp + NUM_SPECIES)
                            : dummies.array(2); // dummy for no soret
+                       // justin, Ithink new size
+                       // justin, this is the allocation of rhotheta
   amrex::Real LeInv = a_pelelm->m_Lewis_inv;
   amrex::Real PrInv = a_pelelm->m_Prandtl_inv;
   amrex::ParallelFor(
