@@ -74,6 +74,7 @@ PeleLM::computeDifferentialDiffusionTerms(
         amrex::convert(ba, IntVect::TheDimensionVector(idim)), dmap[lev],
         NUM_SPECIES + 2, nGrow, MFInfo(), factory);
       // justin : this seems like its a little too big NUM_LITE_SPECIES
+      // this is fluxes, just fine
     }
   }
 #ifdef AMREX_USE_EB
@@ -699,6 +700,7 @@ PeleLM::addWbarTerm(
     int addTurbContrib = 0;
     Array<MultiFab, AMREX_SPACEDIM> beta_ec = getDiffusivity(
       lev, 0, NUM_SPECIES, doZeroVisc, bcRecSpec, *a_beta[lev], addTurbContrib);
+    //justin *a_beta is giving the diff_cc: 6th argument
 
     const Box& domain = geom[lev].Domain();
     bool use_harmonic_avg = m_harm_avg_cen2edge != 0;
@@ -825,6 +827,7 @@ PeleLM::addSoretTerm(
     Array<MultiFab, AMREX_SPACEDIM> beta_ec = getDiffusivity(
       lev, NUM_SPECIES + 2, NUM_SPECIES, doZeroVisc, bcRecSpec, *a_beta[lev]);
     // justin : NUM_SPECIES + 2 = beta_comp, NUM_SPECIES = ncomp
+    // beta_ec is only for soret as well
     const Box& domain = geom[lev].Domain();
     bool use_harmonic_avg = m_harm_avg_cen2edge != 0;
 
@@ -867,7 +870,7 @@ PeleLM::addSoretTerm(
           auto const& T = T_ed.const_array(0);
           auto const& gradT_ar = gradT[lev][idim].const_array(mfi);
           auto const& beta_ar = beta_ec[idim].const_array(mfi);
-          // justin beta_ar is the one giving your the flux
+          // justin beta_ar is the one giving you the flux 
           auto const& spFlux_ar = a_spfluxes[lev][idim]->array(mfi);
           auto const& spsoretFlux_ar =
             (need_soret_fluxes) != 0
@@ -882,7 +885,10 @@ PeleLM::addSoretTerm(
              spsoretFlux_ar] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
               for (int n = 0; n < NUM_SPECIES; n++) {
                 spFlux_ar(i, j, k, n) -=
+                  //justin n matching
                   beta_ar(i, j, k, n) * gradT_ar(i, j, k) / T(i, j, k);
+                // justin 26.05 ask about this
+                // You don't really get the beta_ar in this situation
               }
 
               if (need_soret_fluxes != 0) {
@@ -1176,7 +1182,7 @@ PeleLM::differentialDiffusionUpdate(
             [flux_spec,
              flux_soret] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
               flux_spec(i, j, k, n) += flux_soret(i, j, k, n);
-              // justin : here we use the rhotheta
+              // justin : here we have J += J_soret
               // Adding the Soret to the normal Flux 
             });
         }
