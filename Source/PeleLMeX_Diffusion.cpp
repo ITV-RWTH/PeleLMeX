@@ -1,3 +1,4 @@
+#include "mechanism.H"
 #include <PeleLMeX.H>
 #include <PeleLMeX_Utils.H>
 #include <PeleLMeX_K.H>
@@ -73,8 +74,6 @@ PeleLM::computeDifferentialDiffusionTerms(
       fluxes[lev][idim].define(
         amrex::convert(ba, IntVect::TheDimensionVector(idim)), dmap[lev],
         NUM_SPECIES + 2, nGrow, MFInfo(), factory);
-      // justin : this seems like its a little too big NUM_LITE_SPECIES
-      // this is fluxes, just fine
     }
   }
 #ifdef AMREX_USE_EB
@@ -99,7 +98,6 @@ PeleLM::computeDifferentialDiffusionTerms(
     ((is_init != 0) || (m_use_soret == 0))
       ? Vector<std::array<MultiFab*, AMREX_SPACEDIM>>{}
       : GetVecOfArrOfPtrs(diffData->soret_fluxes);
-  // justin : change size of both
 
 #ifdef AMREX_USE_EB
   if (m_isothermalEB != 0) {
@@ -181,12 +179,13 @@ PeleLM::computeDifferentialDiffusionTerms(
 #ifdef AMREX_USE_EB
     fluxDivergenceRD(
       GetVecOfConstPtrs(getSpeciesVect(a_time)), 0, GetVecOfPtrs(diffData->DT),
-      0, GetVecOfArrOfPtrs(diffData->soret_fluxes), 0, {}, 0, NUM_SPECIES,
+      0, GetVecOfArrOfPtrs(diffData->soret_fluxes), 0, {}, 0, NUM_LITE_SPECIES,
       intensiveFluxes, bcRecSpec_d.dataPtr(), -1.0, m_dt);
 #else
     fluxDivergence(
       GetVecOfPtrs(diffData->DT), 0, GetVecOfArrOfPtrs(diffData->soret_fluxes),
-      0, NUM_SPECIES, intensiveFluxes, -1.0);
+      0, NUM_LITE_SPECIES, intensiveFluxes, -1.0);
+    // 202506
 #endif
   }
 
@@ -345,8 +344,8 @@ PeleLM::correctIsothermalBoundary(
     for (int lev = 0; lev <= finest_level; lev++) {
       for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
         soretfluxes[lev][idim] = new MultiFab(
-          grids[lev], dmap[lev], NUM_SPECIES, 1, MFInfo(), Factory(lev));
-        // justin : should these things change as well?
+          grids[lev], dmap[lev], NUM_LITE_SPECIES, 1, MFInfo(), Factory(lev));
+        // 202506* 
         soretfluxes[lev][idim]->setVal(0.0);
       }
     }
@@ -357,8 +356,9 @@ PeleLM::correctIsothermalBoundary(
     for (int lev = 0; lev <= finest_level; lev++) {
       for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
         soretfluxes[lev][idim] = new MultiFab(
-          *a_soretfluxes[lev][idim], amrex::make_alias, 0, NUM_SPECIES);
+          *a_soretfluxes[lev][idim], amrex::make_alias, 0, NUM_LITE_SPECIES);
       }
+      // justin 202506*
     }
   }
   for (int lev = 0; lev <= finest_level; ++lev) {
@@ -388,11 +388,14 @@ PeleLM::correctIsothermalBoundary(
                                   ? a_wbarfluxes[lev][idim]->const_array(mfi)
                                   : rhoD_ec;
         auto const& boundary_ar = a_spec_boundary[lev]->array(mfi);
+        // mapping of soret to normal species
+        int liteIdx[NUM_LITE_SPECIES];
+        egtransetKTDIF(liteIdx);
         amrex::ParallelFor(
           ebx,
           [flux_wbar, flux_soret, rhoD_ec, boundary_ar, idim, edomain, bc_lo,
            bc_hi, use_wbar = m_use_wbar,
-           need_explicit_fluxes] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+           need_explicit_fluxes, liteIdx] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
             int idx[3] = {i, j, k};
             bool on_lo = (bc_lo == BoundaryCondition::BCNoSlipWallIsotherm ||
                           bc_lo == BoundaryCondition::BCSlipWallIsotherm) &&
@@ -404,8 +407,7 @@ PeleLM::correctIsothermalBoundary(
               if (on_lo) { // need to move -1 for lo boundary
                 idx[idim] -= 1;
               }
-              for (int n = 0; n < NUM_SPECIES; n++) {
-                boundary_ar(idx[0], idx[1], idx[2], n) = flux_soret(i, j, k, n);
+              for (int n = 0; n < NUM_SPECIES; ++n) {
                 // add lagged wbar flux
                 if (use_wbar != 0 && !need_explicit_fluxes) {
                   boundary_ar(idx[0], idx[1], idx[2], n) +=
@@ -413,6 +415,10 @@ PeleLM::correctIsothermalBoundary(
                 }
                 boundary_ar(idx[0], idx[1], idx[2], n) /= rhoD_ec(i, j, k, n);
               }
+              for (int n = 0; n < NUM_LITE_SPECIES; ++n){
+                boundary_ar(idx[0], idx[1], idx[2], liteIdx[n]) = flux_soret(i, j, k, liteIdx[n]);
+              }
+              // 202506*
             }
           });
       }
@@ -527,8 +533,6 @@ PeleLM::computeDifferentialDiffusionFluxes(
       addSoretTerm(
         a_fluxes, a_soretfluxes, GetVecOfConstPtrs(getTempVect(a_time)),
         GetVecOfConstPtrs(getDiffusivityVect(a_time)));
-      // justin : hier wird unterschieden und wenn true = dann wird
-      // a_soretfluxes mit gegeben
     }
   }
 
@@ -825,9 +829,9 @@ PeleLM::addSoretTerm(
     // Get edge diffusivity
     int doZeroVisc = 1;
     Array<MultiFab, AMREX_SPACEDIM> beta_ec = getDiffusivity(
-      lev, NUM_SPECIES + 2, NUM_SPECIES, doZeroVisc, bcRecSpec, *a_beta[lev]);
+      lev, NUM_SPECIES + 2, NUM_LITE_SPECIES, doZeroVisc, bcRecSpec, *a_beta[lev]);
     // justin : NUM_SPECIES + 2 = beta_comp, NUM_SPECIES = ncomp
-    // beta_ec is only for soret as well
+    // 202506* I think this is for soret, so thats fine?
     const Box& domain = geom[lev].Domain();
     bool use_harmonic_avg = m_harm_avg_cen2edge != 0;
 
@@ -870,34 +874,31 @@ PeleLM::addSoretTerm(
           auto const& T = T_ed.const_array(0);
           auto const& gradT_ar = gradT[lev][idim].const_array(mfi);
           auto const& beta_ar = beta_ec[idim].const_array(mfi);
-          // justin beta_ar is the one giving you the flux 
           auto const& spFlux_ar = a_spfluxes[lev][idim]->array(mfi);
           auto const& spsoretFlux_ar =
             (need_soret_fluxes) != 0
               ? a_spsoretfluxes[lev][idim]->array(mfi)
               : a_spfluxes[lev][idim]->array(mfi); // Dummy unused Array4
-
+          int liteIdx[NUM_LITE_SPECIES];
+          egtransetKTDIF(liteIdx);
           // Soret flux is : - rho * D_m * chi_m * \nabla T / T
           // with beta_m = rho * D_m * chi_m below
           amrex::ParallelFor(
             ebx,
             [need_soret_fluxes, gradT_ar, beta_ar, T, spFlux_ar,
-             spsoretFlux_ar] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-              for (int n = 0; n < NUM_SPECIES; n++) {
-                spFlux_ar(i, j, k, n) -=
-                  //justin n matching
-                  beta_ar(i, j, k, n) * gradT_ar(i, j, k) / T(i, j, k);
-                // justin 26.05 ask about this
-                // You don't really get the beta_ar in this situation
+             spsoretFlux_ar, liteIdx] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+              for (int n = 0; n < NUM_LITE_SPECIES; n++) {
+                spFlux_ar(i, j, k, liteIdx[n]) -=
+                  beta_ar(i, j, k, liteIdx[n]) * gradT_ar(i, j, k) / T(i, j, k);
               }
+              // 202506
 
               if (need_soret_fluxes != 0) {
-                for (int n = 0; n < NUM_SPECIES; n++) {
-                  spsoretFlux_ar(i, j, k, n) =
-                    -beta_ar(i, j, k, n) * gradT_ar(i, j, k) / T(i, j, k);
+                for (int n = 0; n < NUM_LITE_SPECIES; n++) {
+                  spsoretFlux_ar(i, j, k, liteIdx[n]) =
+                    -beta_ar(i, j, k, liteIdx[n]) * gradT_ar(i, j, k) / T(i, j, k);
                 }
-                // justin : I think this is for boundary conditionds and should
-                // be unchanged
+                // 202506
               }
             });
         }
@@ -1177,13 +1178,16 @@ PeleLM::differentialDiffusionUpdate(
           auto const& flux_spec = fluxes[lev][idim].array(mfi);
           auto const& flux_soret =
             diffData->soret_fluxes[lev][idim].const_array(mfi);
+          int liteIdx[NUM_LITE_SPECIES];
+          egtransetKTDIF(liteIdx);
           amrex::ParallelFor(
-            ebx, NUM_SPECIES,
+            ebx, NUM_LITE_SPECIES,
             [flux_spec,
-             flux_soret] AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
-              flux_spec(i, j, k, n) += flux_soret(i, j, k, n);
-              // justin : here we have J += J_soret
-              // Adding the Soret to the normal Flux 
+             flux_soret,
+            liteIdx]
+            AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
+              flux_spec(i, j, k, liteIdx[n]) += flux_soret(i, j, k, liteIdx[n]);
+             // 202506* is this even legal?
             });
         }
       }

@@ -1359,7 +1359,7 @@ pelelmex_derdiffc(
   AMREX_ASSERT(statefab.box().contains(bx));
   AMREX_ASSERT(derfab.nComp() >= dcomp + ncomp);
   if (a_pelelm->m_use_soret != 0) {
-    AMREX_ASSERT(ncomp == 2 * NUM_SPECIES); //justin ncomp == NUM_SPECIES + NUM_LITE_SPECIES?
+    AMREX_ASSERT(ncomp == NUM_LITE_SPECIES + NUM_SPECIES); // 202506
   }
   if (a_pelelm->m_use_soret == 0) {
     AMREX_ASSERT(ncomp == NUM_SPECIES);
@@ -1377,8 +1377,6 @@ pelelmex_derdiffc(
   auto const* leosparm = a_pelelm->eos_parms.device_parm();
   auto rhotheta = do_soret ? derfab.array(dcomp + NUM_SPECIES)
                            : dummies.array(2); // dummy for no soret
-                       // justin, Ithink new size
-                       // justin, this is the allocation of rhotheta
   amrex::Real LeInv = a_pelelm->m_Lewis_inv;
   amrex::Real PrInv = a_pelelm->m_Prandtl_inv;
   amrex::ParallelFor(
@@ -1416,7 +1414,8 @@ pelelmex_derlambda(
   bool do_fixed_Le = (a_pelelm->m_fixed_Le != 0);
   bool do_fixed_Pr = (a_pelelm->m_fixed_Pr != 0);
   bool do_soret = (a_pelelm->m_use_soret != 0);
-  FArrayBox dummies(bx, 2 * NUM_SPECIES + 1, The_Async_Arena());
+  FArrayBox dummies(bx, NUM_SPECIES + NUM_LITE_SPECIES + 1, The_Async_Arena());
+                       // 202506
   auto const& rhoY = statefab.const_array(FIRSTSPEC);
   auto const& T = statefab.array(TEMP);
   auto rhoD = dummies.array(1);

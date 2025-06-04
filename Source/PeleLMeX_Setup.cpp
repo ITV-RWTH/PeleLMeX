@@ -3,6 +3,7 @@
 #include <PeleLMeX_DeriveFunc.H>
 #include <PeleLMeX_BPatch.H>
 #include "PelePhysics.H"
+#include "mechanism.H"
 #include <AMReX_buildInfo.H>
 #include <PeleLMeX_ProblemSpecificFunctions.H>
 
@@ -1079,22 +1080,29 @@ PeleLM::derivedSetup()
       var_names_massfrac, pelelmex_dermolefrac, the_same_box);
 
     // Species diffusion coefficients
-    // justin, hi please understand this thanks
     for (int n = 0; n < NUM_SPECIES; n++) {
       var_names_massfrac[n] = "D_" + spec_names[n];
     }
     if (m_use_soret != 0) {
-      var_names_massfrac.resize(2 * NUM_SPECIES);
-      for (int n = 0; n < NUM_SPECIES; n++) {
-        var_names_massfrac[n + NUM_SPECIES] = "theta_" + spec_names[n];
+
+      // using KTDIF to rematch the names
+      int lightIdx[NUM_LITE_SPECIES];
+      egtransetKTDIF(lightIdx);
+
+      var_names_massfrac.resize(NUM_LITE_SPECIES * NUM_SPECIES);
+      for (int n = 0; n < NUM_LITE_SPECIES; n++) {
+        var_names_massfrac[n + NUM_SPECIES] = "theta_" + spec_names[lightIdx[n]];
       }
       derive_lst.add(
-        "diffcoeff", IndexType::TheCellType(), 2 * NUM_SPECIES,
+        "diffcoeff", IndexType::TheCellType(), NUM_LITE_SPECIES * NUM_SPECIES,
         var_names_massfrac, pelelmex_derdiffc, the_same_box);
+      // 202506*
+      // I think the names will be fucked up
+      // I think you fixed that
     } else {
       derive_lst.add(
         "diffcoeff", IndexType::TheCellType(), NUM_SPECIES, var_names_massfrac,
-        pelelmex_derdiffc, the_same_box); // justin ask about this
+        pelelmex_derdiffc, the_same_box); 
     }
 
     // Rho - sum rhoYs
