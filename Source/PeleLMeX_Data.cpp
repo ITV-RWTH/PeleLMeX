@@ -142,7 +142,7 @@ PeleLM::AdvanceDiffData::AdvanceDiffData(
       }
       if (a_use_soret != 0) {
         DT[lev].define(
-          ba[lev], dm[lev], NUM_LITE_SPECIES, nGrowAdv, MFInfo(), *factory[lev]); // 202506
+          ba[lev], dm[lev], NUM_SPECIES, nGrowAdv, MFInfo(), *factory[lev]); // 202506
         for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
           const BoxArray& faceba =
             amrex::convert(ba[lev], IntVect::TheDimensionVector(idim));
