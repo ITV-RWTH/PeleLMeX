@@ -9,6 +9,7 @@
 #include <AMReX_Vector.H>
 #include <array>
 #include <string>
+#include <AMReX_Reduce.H> 
 #ifdef PELE_USE_CATALYST
 #include <catalyst.hpp>
 #include <conduit_cpp_to_c.hpp>
@@ -27,15 +28,12 @@ void PeleLM::CatalystInit() {
     pp_catalyst.query("implementation", implementation);
     pp_catalyst.query("implementation_search_paths", searchPaths);
     pp_catalyst.query("proxy_paths", proxyPaths);
-    error = 0;
-    integral = 0;
-    steering_dt = 0;
-    prev_steering_time = 0;
-    max_temp = 0;
-    for(int i=0;i<3;i++){
-          phiSteering.push_back(1);
-    }
-
+    next_time = -1;
+    steering_dt = (prob_parm->wall_height/(PeleLM::prob_parm->V_mean*1.5))/10;
+    phiSteering.push_back(prob_parm->phi);
+    phiSteering.push_back(10000);
+    phiSteering.push_back(0.006);
+    
     conduit::Node node;
 
     size_t scriptNumber = 0;
@@ -87,10 +85,10 @@ void PeleLM::AddDummyZAxis (conduit::Node &mesh_data) {
 
         // At this point, we assume it's 2D and we want to add the dummy third dimension
         // 1) Add dims/k = 2
-        coords["dims/k"] = 0;
+        coords["dims/k"] = 1;
 
         // 2) Add spacing/dz
-        coords["spacing/dz"] = 0;  // or your chosen dummy value
+        coords["spacing/dz"] = 0;  
 
         // 3) Add origin/z
         coords["origin/z"] = 0;
@@ -116,8 +114,8 @@ void PeleLM::AddDummyZAxis (conduit::Node &mesh_data) {
                     conduit::Node &wnd = windows[w];
                     // add 'k' = 0, dims/k = 1, ratio/k = 1
                     wnd["origin/k"] = 0;
-                    wnd["dims/k"]   = 0;
-                    wnd["ratio/k"]  = 0;
+                    wnd["dims/k"]   = 1;
+                    wnd["ratio/k"]  = 1;
                 }
             }
         }
@@ -137,20 +135,20 @@ void PeleLM::EmptyFieldData(const std::vector<std::string>& field_names, conduit
     dom["coordsets/coords/type"] = "uniform";
     dom["coordsets/coords/dims/i"] = 0;
     dom["coordsets/coords/dims/j"] = 0;
-    if(BL_SPACEDIM > 2){
+    if(BL_SPACEDIM < 3){
         dom["coordsets/coords/dims/k"] = 0;
     }
 
     dom["coordsets/coords/spacing/dx"] = 0;
     dom["coordsets/coords/spacing/dy"] = 0;
-    if(BL_SPACEDIM > 2){
+    if(BL_SPACEDIM < 3){
         dom["coordsets/coords/spacing/dz"] = 0;
     }
 
 
     dom["coordsets/coords/origin/x"] = 0;
     dom["coordsets/coords/origin/y"] = 0;
-    if(BL_SPACEDIM > 2){
+    if(BL_SPACEDIM < 3){
         dom["coordsets/coords/origin/z"] = 0;
     }
 
@@ -158,7 +156,7 @@ void PeleLM::EmptyFieldData(const std::vector<std::string>& field_names, conduit
     dom["topologies/topo/type"]     = "uniform";
     dom["topologies/topo/elements/origin/i0"] = 0;
     dom["topologies/topo/elements/origin/j0"] = 0;
-     if(BL_SPACEDIM > 2){
+     if(BL_SPACEDIM < 3){
         dom["topologies/topo/elements/origin/k0"] = 0;
     }
 
@@ -177,6 +175,9 @@ void PeleLM::CatalystExecute () {
     BL_PROFILE("PeleLM::CatalystExecute()");
     //----------------------------------------------------------------
     // Blueprint : Mesh data
+    std::string copy_conduit_node = "copy_conduit_node";
+    BL_PROFILE_VAR("copy_conduit_node", copy_conduit_node);
+    
     conduit::Node node;
     auto & state = node["catalyst/state"];
     state["timestep"].set(m_nstep);
@@ -557,18 +558,19 @@ for (int lev = 0; lev <= finest_level; ++lev) {
         EmptyFieldData(plt_VarsName, root);
     }
 
-
-    // if(AMREX_SPACEDIM>2){
-    //     AddDummyZAxis(root);
-    // }
+    BL_PROFILE_VAR_STOP(copy_conduit_node);
+    if(AMREX_SPACEDIM<3){
+         AddDummyZAxis(root);
+    }
+    node.print();
     
 
 
     // Catalyst Execute
-    std::string anyname = "anyname";
-    BL_PROFILE_VAR("catalyst_execute", anyname);
+    std::string catalyst_execute_fun = "catalyst_execute_fun";
+    BL_PROFILE_VAR("catalyst_execute_fun", catalyst_execute_fun);
     catalyst_status err = catalyst_execute(conduit::c_node(&node));
-    BL_PROFILE_VAR_STOP(anyname);
+    BL_PROFILE_VAR_STOP(catalyst_execute_fun);
 
     if (err != catalyst_status_ok) {
         std::string message = " Error: Failed to execute Catalyst!\n";
@@ -581,6 +583,10 @@ for (int lev = 0; lev <= finest_level; ++lev) {
 }
 
 void PeleLM::compute_local_phi(std::vector<double> phi){
+    double dx = PeleLM::prob_parm->slot_width / 2.0 / 64;
+    for (int i=0; i < 64; i++){
+        PeleLM::prob_parm->loc_phi[i] = phi[0] / (1+exp(phi[1]*(i*dx-phi[2]))) ;
+    }
 }
 
 
@@ -588,51 +594,59 @@ void PeleLM::CatalystSteering() {
 
     BL_PROFILE("PeleLM::CatalystSteering()");
     amrex::Print() << "running Catalyst Steering... \n"; 
+
     bool foundCell = false;
-   const amrex::Real x_probe = (prob_parm->slot_width / 2.0) * 0.9;
-   const amrex::Real y_probe = prob_parm->wall_height;
-   amrex::Real localTemp = -9999.0;
+    const amrex::Real x_probe = (prob_parm->slot_width / 2.0) * 0.9;
+    const amrex::Real y_probe = prob_parm->wall_height;
+    amrex::Real localTemp = -9999.0;
 
-   for (int lev = finest_level-1; lev >=finest_level-1 ; --lev)
-    {
-
-    const auto geomdata = geom[lev].data();
-    const amrex::Real* dx_lev = geomdata.CellSize();
-    const amrex::Real* plo_lev = geomdata.ProbLo();
-
-
-    int iWanted_lev = static_cast<int>((x_probe - plo_lev[0]) / dx_lev[0]);
-    int jWanted_lev = static_cast<int>((y_probe - plo_lev[1]) / dx_lev[1]);
-
-    amrex::IntVect iv_lev(AMREX_D_DECL(iWanted_lev, jWanted_lev, 0));
-
-
-    MultiFab& state_mf = m_leveldata_new[lev]->state;
-
-    for (amrex::MFIter mfi(state_mf); mfi.isValid(); ++mfi)
-    {
-        const amrex::Box& bx = mfi.validbox();
-        if (bx.contains(iv_lev))
+    for (int lev = finest_level-1; lev >=finest_level-1 ; --lev)
         {
-            auto const& arr = state_mf.const_array(mfi);
-            localTemp = arr(iWanted_lev, jWanted_lev, 0, TEMP);
 
-            foundCell = true;
-            break;
+        const auto geomdata = geom[lev].data();
+        const amrex::Real* dx_lev = geomdata.CellSize();
+        const amrex::Real* plo_lev = geomdata.ProbLo();
+
+
+        int iWanted_lev = static_cast<int>((x_probe - plo_lev[0]) / dx_lev[0]);
+        int jWanted_lev = static_cast<int>((y_probe - plo_lev[1]) / dx_lev[1]);
+
+        amrex::IntVect iv_lev(AMREX_D_DECL(iWanted_lev, jWanted_lev, 0));
+
+
+        MultiFab& state_mf = m_leveldata_new[lev]->state;
+
+        for (amrex::MFIter mfi(state_mf); mfi.isValid(); ++mfi)
+        {
+            const amrex::Box& bx = mfi.validbox();
+            if (bx.contains(iv_lev))
+            {
+                auto const& arr = state_mf.const_array(mfi);
+                localTemp = arr(iWanted_lev, jWanted_lev, 0, TEMP);
+
+                foundCell = true;
+                break;
+            }
         }
-    }
-        if (foundCell) {
-            std::cout << "we found the cell at Proc() " << ParallelDescriptor::MyProc() << std::endl;
-            break;
-        } 
-    }
+        }
 
-    if(prev_steering_time == 0) {
-        steering_dt = 0;
+    Real tmax = -std::numeric_limits<Real>::max();
+    for (int lev = 0; lev <= finest_level; ++lev) {
+        const MultiFab& mf = m_leveldata_new[lev]->state;
+        tmax = std::max(tmax, mf.max(TEMP, 0, true));  // local max
     }
-    else {
-        steering_dt = m_cur_time - prev_steering_time;
-    }
+    amrex::ParallelDescriptor::ReduceRealMax(tmax);
+
+    
+
+    // if(prev_steering_time == 0) {
+    //     PrevTemp = localTemp;
+    //     prev_steering_time = m_cur_time;
+    //     return;
+    // }
+    // else {
+    //     steering_dt = m_cur_time - prev_steering_time;
+    // }
  
     // 2) Blueprint 
     conduit::Node node;
@@ -656,11 +670,11 @@ void PeleLM::CatalystSteering() {
     steerable_data["topologies/mesh/elements/shape"].set("point");
     steerable_data["topologies/mesh/elements/connectivity"].set_int32_vector({ 0 });
     
-    steerable_data["fields/T_center/association"].set("vertex");
-    steerable_data["fields/T_center/topology"].set("mesh");
-    steerable_data["fields/T_center/volume_dependent"].set("false");
-    steerable_data["fields/T_center/values"].set_float64_vector(
-        { PeleLM::prob_parm->T_center });
+    // steerable_data["fields/T_center/association"].set("vertex");
+    // steerable_data["fields/T_center/topology"].set("mesh");
+    // steerable_data["fields/T_center/volume_dependent"].set("false");
+    // steerable_data["fields/T_center/values"].set_float64_vector(
+    //     { PeleLM::prob_parm->T_center });
 
     // steerable_data["fields/V_mean/association"].set("vertex");
     // steerable_data["fields/V_mean/topology"].set("mesh");
@@ -668,20 +682,25 @@ void PeleLM::CatalystSteering() {
     //     { PeleLM::prob_parm->V_mean });
 
     
-    steerable_data["fields/error/association"].set("vertex");
-    steerable_data["fields/error/topology"].set("mesh");
-    steerable_data["fields/error/volume_dependent"].set("false");
-    steerable_data["fields/error/values"].set_float64_vector({ error });
+    // steerable_data["fields/error/association"].set("vertex");
+    // steerable_data["fields/error/topology"].set("mesh");
+    // steerable_data["fields/error/volume_dependent"].set("false");
+    // steerable_data["fields/error/values"].set_float64_vector({ error });
 
-    steerable_data["fields/integral/association"].set("vertex");
-    steerable_data["fields/integral/topology"].set("mesh");
-    steerable_data["fields/integral/volume_dependent"].set("false");
-    steerable_data["fields/integral/values"].set_float64_vector({ integral });
+    steerable_data["fields/next_time/association"].set("vertex");
+    steerable_data["fields/next_time/topology"].set("mesh");
+    steerable_data["fields/next_time/volume_dependent"].set("false");
+    steerable_data["fields/next_time/values"].set_float64_vector({ next_time });
 
     steerable_data["fields/temperature/association"].set("vertex");
     steerable_data["fields/temperature/topology"].set("mesh");
     steerable_data["fields/temperature/volume_dependent"].set("false");
     steerable_data["fields/temperature/values"].set_float64_vector({ localTemp });
+
+    // steerable_data["fields/pv_temp_prev/association"].set("vertex");
+    // steerable_data["fields/pv_temp_prev/topology"].set("mesh");
+    // steerable_data["fields/pv_temp_prev/volume_dependent"].set("false");
+    // steerable_data["fields/pv_temp_prev/values"].set_float64_vector({ PrevTemp });
 
     steerable_data["fields/steering_dt/association"].set("vertex");
     steerable_data["fields/steering_dt/topology"].set("mesh");
@@ -691,16 +710,46 @@ void PeleLM::CatalystSteering() {
     steerable_data["fields/max_temp/association"].set("vertex");
     steerable_data["fields/max_temp/topology"].set("mesh");
     steerable_data["fields/max_temp/volume_dependent"].set("false");
-    steerable_data["fields/max_temp/values"].set_float64_vector({ localTemp });
+    steerable_data["fields/max_temp/values"].set_float64_vector({ tmax });
 
-    steerable_data["fields/phi_global/association"].set("vertex");
-    steerable_data["fields/phi_global/topology"].set("mesh");
-    steerable_data["fields/phi_global/volume_dependent"].set("false");
-    steerable_data["fields/phi_global/values"].set_float64_vector({ PeleLM::prob_parm->phi });
+    // steerable_data["fields/phi_global/association"].set("vertex");
+    // steerable_data["fields/phi_global/topology"].set("mesh");
+    // steerable_data["fields/phi_global/volume_dependent"].set("false");
+    // steerable_data["fields/phi_global/values"].set_float64_vector({ PeleLM::prob_parm->phi });
+
+    // steerable_data["fields/P00/association"].set("vertex");
+    // steerable_data["fields/P00/topology"].set("mesh");
+    // steerable_data["fields/P00/volume_dependent"].set("false");
+    // steerable_data["fields/P00/values"].set_float64_vector({ p00 });
+
+    // steerable_data["fields/P01/association"].set("vertex");
+    // steerable_data["fields/P01/topology"].set("mesh");
+    // steerable_data["fields/P01/volume_dependent"].set("false");
+    // steerable_data["fields/P01/values"].set_float64_vector({ p01 });
+
+    // steerable_data["fields/P10/association"].set("vertex");
+    // steerable_data["fields/P10/topology"].set("mesh");
+    // steerable_data["fields/P10/volume_dependent"].set("false");
+    // steerable_data["fields/P10/values"].set_float64_vector({ p10 });
+
+    // steerable_data["fields/P11/association"].set("vertex");
+    // steerable_data["fields/P11/topology"].set("mesh");
+    // steerable_data["fields/P11/volume_dependent"].set("false");
+    // steerable_data["fields/P11/values"].set_float64_vector({ p11 });
+
+    // steerable_data["fields/A/association"].set("vertex");
+    // steerable_data["fields/A/topology"].set("mesh");
+    // steerable_data["fields/A/volume_dependent"].set("false");
+    // steerable_data["fields/A/values"].set_float64_vector({ A });
+
+    // steerable_data["fields/B/association"].set("vertex");
+    // steerable_data["fields/B/topology"].set("mesh");
+    // steerable_data["fields/B/volume_dependent"].set("false");
+    // steerable_data["fields/B/values"].set_float64_vector({ B });
 
 
     // for visualization && find maximum temperature
-
+    /*
     auto& meshChannel = node["catalyst/channels/mesh"];
     meshChannel["type"].set_string("amrmesh");
     auto& meshData = meshChannel["data"];
@@ -739,8 +788,9 @@ void PeleLM::CatalystSteering() {
 
     if (!root.dtype().is_object())
     {
+        conduit::Node empty_node;
        //EmptyFieldData(plt_VarsName, root);
-       catalyst_execute();
+       catalyst_execute(conduit::c_node(&empty_node));
     }
 
     
@@ -754,7 +804,7 @@ void PeleLM::CatalystSteering() {
     }
 
     //amrex::Abort("just stop here");
-
+    */
     catalyst_status err = catalyst_execute(conduit::c_node(&node));
     if (err != catalyst_status_ok)
     {
@@ -767,9 +817,9 @@ void PeleLM::CatalystSteering() {
         amrex::Print() << "Succesfully execute the catalyst \n";
     }
     
-    for (int lev = 0; lev <= finest_level; ++lev) {
-        delete mf_plt[lev];
-    }
+    //for (int lev = 0; lev <= finest_level; ++lev) {
+    //    delete mf_plt[lev];
+    //}
 
     conduit::Node result;
     catalyst_status err_result = catalyst_results(conduit::c_node(&result));
@@ -782,77 +832,120 @@ void PeleLM::CatalystSteering() {
         int localFlag   = (foundCell ? ParallelDescriptor::MyProc() : -1);
         ParallelDescriptor::ReduceIntMax(localFlag);
         int rootRank    = localFlag; 
-
-        double localError           = error;
-        double localIntegral        = integral;
+        
+        double localSteering_dt = steering_dt;
+        // double localError           = error;
+        // double localIntegral        = integral;
         //double localVmean           = PeleLM::prob_parm->V_mean;    
+        double localnext_time = next_time;
         std::array<double,3> localPhi;
         for(int i = 0 ; i <3; i ++) {
             localPhi[i] = phiSteering[i];
         }
         //double localTcenter         = PeleLM::prob_parm->T_center;
-        int    localSteeringInt     = inSitu_Steering_int;
-        double localmaxTemp         = max_temp;
-
-        if (ParallelDescriptor::MyProc() == rootRank){
-        }
+        // int    localSteeringInt     = inSitu_Steering_int;
+        // double localmaxTemp         = max_temp;
+        // double localPrevTemp      = PrevTemp;
+        // double localP00           = p00;
+        // double localP01           = p01;
+        // double localP10           = p10;
+        // double localP11           = p11;
+        // double localA             = A;
+        // double localB             = B;
 
         if (rootRank != -1) {
 
             if (ParallelDescriptor::MyProc() == rootRank)
-            {
+            {   
                 auto &fields  = result["catalyst/steerable/fields"];
-                localError    = fields["error/values"].to_double();
-                localIntegral = fields["integral/values"].to_double();
-                //localVmean    = fields["V_mean/values"].to_double();
-                localPhi[0]   = fields["coords/values/0"].to_double();
-                localPhi[1]   = fields["coords/values/1"].to_double();
-                localPhi[2]   = fields["coords/values/2"].to_double();
-                //localTcenter  = fields["T_center/values"].to_double();
+                //localError    = fields["error/values"].to_double();
+                //localIntegral = fields["integral/values"].to_double();
+                localPhi[0]   = fields["phi_local/values/0"].to_double();
+                localPhi[1]   = fields["phi_local/values/1"].to_double();
+                localPhi[2]   = fields["phi_local/values/2"].to_double();
+                //localSteering_dt = fields["steering_dt/values"].to_double();
+                localnext_time = fields["next_time/values"].to_double();
+                if (localnext_time == 0){
+                    localnext_time = next_time;
+                }
+                if (localPhi[0]==0 && localPhi[1]==0 && localPhi[2]==0){
+                    localPhi[0] = phiSteering[0];
+                    localPhi[1] = phiSteering[1];
+                    localPhi[2] = phiSteering[2];
+                }
                 // localSteeringInt = m_nstep + static_cast<int>(
                 //                     (y_probe/PeleLM::prob_parm->V_mean)/m_dt*5
                 //                 );
-                localSteeringInt = 1;
-                localmaxTemp  = fields["max_temp/values"].to_double();
+                // localSteeringInt = 1;
+                // localPrevTemp = fields["pv_temp_prev/values"].to_double();
+                // localmaxTemp  = fields["max_temp/values"].to_double();
+                // localP00      = fields["P00/values"].to_double();
+                // localP01      = fields["P01/values"].to_double();
+                // localP10      = fields["P10/values"].to_double();
+                // localP11      = fields["P11/values"].to_double();
+                // localA        = fields["A/values"].to_double();
+                // localB        = fields["B/values"].to_double();
+
             }
 
-            ParallelDescriptor::Bcast(&localError,      1, rootRank);
-            ParallelDescriptor::Bcast(&localIntegral,   1, rootRank);
+            // ParallelDescriptor::Bcast(&localError,      1, rootRank);
+            // ParallelDescriptor::Bcast(&localIntegral,   1, rootRank);
             //ParallelDescriptor::Bcast(&localVmean,      1, rootRank);
             ParallelDescriptor::Bcast(localPhi.data(),  3, rootRank);
+            //ParallelDescriptor::Bcast(&localSteering_dt,1, rootRank);
+            ParallelDescriptor::Bcast(&localnext_time,  1, rootRank);
             //ParallelDescriptor::Bcast(&localTcenter,    1, rootRank);
-            ParallelDescriptor::Bcast(&localSteeringInt,1, rootRank);
-            ParallelDescriptor::Bcast(&localmaxTemp,1, rootRank);
+            //ParallelDescriptor::Bcast(&localSteeringInt,1, rootRank);
+            // ParallelDescriptor::Bcast(&localmaxTemp,1, rootRank);
+            // ParallelDescriptor::Bcast(&localPrevTemp,1, rootRank);
+            // ParallelDescriptor::Bcast(&localP00,1, rootRank);
+            // ParallelDescriptor::Bcast(&localP01,1, rootRank);
+            // ParallelDescriptor::Bcast(&localP10,1, rootRank);
+            // ParallelDescriptor::Bcast(&localP11,1, rootRank);
+            // ParallelDescriptor::Bcast(&localA,1, rootRank);
+            // ParallelDescriptor::Bcast(&localB,1, rootRank);
 
-            error                          = localError;
-            integral                       = localIntegral;
+
+            // error                          = localError;
+            // integral                       = localIntegral;
+            // PrevTemp                       = localPrevTemp;
             //PeleLM::prob_parm->V_mean      = localVmean;
             //PeleLM::prob_parm->T_center    = localTcenter;
             for(int i = 0 ; i <3; i ++) {
                 phiSteering[i] = localPhi[i];
             }
-            inSitu_Steering_int            = localSteeringInt;
-            max_temp                       = localmaxTemp;
+            //steering_dt = localSteering_dt;
+            next_time = localnext_time;
+            // inSitu_Steering_int            = localSteeringInt;
+            // p00                            = localP00;
+            // p01                            = localP01;
+            // p10                            = localP10;
+            // p11                            = localP11;
+            // A                               = localA;
+            // B                               = localB;
+
 
             compute_local_phi(phiSteering);
+            /*
+            inSitu_Steering_int = m_nstep + static_cast<int>(
+                                 (y_probe/PeleLM::prob_parm->V_mean)*5);
 
-            amrex::Print() << "[rank " << ParallelDescriptor::MyProc()
-                       << "] error=" << error
-                       << ", integral=" << integral
-                //       << ", V_mean=" << PeleLM::prob_parm->V_mean
-                //       << ", T_center=" << PeleLM::prob_parm->T_center
-                       << ", Phi(x) coefficient =" << phiSteering[0] << " " <<  phiSteering[1] << " " <<  phiSteering[2]
-                       << ", Steering_dt=" << steering_dt
-                       << ", inSitu_Steering_int=" << inSitu_Steering_int
-                       << ", max temp =" << max_temp
-                       << "\n";
+            amrex::Print() << "[next steering time " << m_cur_time +  (y_probe/PeleLM::prob_parm->V_mean)*5 << "approximately at steps  "<< static_cast<int>(
+                (y_probe/PeleLM::prob_parm->V_mean)*5/m_dt) << "\n";
+            */
+            //inSitu_Steering_int = 1;
             
-    
+            // amrex::Print() << 
+            //            "[steering] next steering time :"
+            //            << next_time
+            //            << "\n";
+            
+            
             Gpu::copy(Gpu::hostToDevice, prob_parm, prob_parm + 1, prob_parm_d);
         }
+        
     }
-
-    prev_steering_time = m_cur_time;
+    // prev_steering_time = m_cur_time;
 }
     
 

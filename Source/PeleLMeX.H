@@ -168,10 +168,9 @@ public:
 
   void EmptyFieldData(const std::vector<std::string>& field_names, conduit::Node& node);
 
-#endif
   void Feedback();
-  void Regler(double& T_center, double& T_coflow, double& V_mean, double& V_coflow, double& phi);
-
+  void Regler(double&, double&, double&, double&, double&);
+#endif
   // VariablesSetup
   void variablesSetup();
 
@@ -1030,13 +1029,15 @@ public:
   int do_inSitu_Visualization;
   int inSitu_plot_int; 
   int do_inSitu_Steering;
-  int inSitu_Steering_int; 
-  double error;
-  double integral;
+  int inSitu_Steering_int=1;
   double max_temp;
-  double prev_steering_time;
   double steering_dt;
   std::vector<double> phiSteering;
+  double next_time;
+
+
+
+
    //-----------------------------------------------------------------------------
 
   //-----------------------------------------------------------------------------

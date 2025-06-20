@@ -812,7 +812,6 @@ PeleLM::readInSituParameters()
   pp.query("do_inSitu_Visualization", do_inSitu_Visualization);
   pp.query("inSitu_plot_int", inSitu_plot_int);
   pp.query("do_inSitu_Steering", do_inSitu_Steering);
-  pp.query("inSitu_Steering_int", inSitu_Steering_int);
 }
 
 void

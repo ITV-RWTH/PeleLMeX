@@ -106,8 +106,17 @@ PeleLM::Evolve()
   if(do_inSitu_Visualization && m_nstep%inSitu_plot_int==0){
     CatalystExecute();
   }
-  if(do_inSitu_Steering && m_nstep%inSitu_Steering_int==0){
-    CatalystSteering();
+  if(do_inSitu_Steering) {
+    //if(m_cur_time > inSitu_Steering_int)
+    // if(m_nstep % inSitu_Steering_int == 0) 
+    // {
+    //   CatalystSteering();
+    // }
+    if(m_cur_time > next_time)
+    {
+      CatalystSteering();
+    }
+    
   }
   #endif
 
