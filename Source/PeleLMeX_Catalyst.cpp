@@ -562,7 +562,6 @@ for (int lev = 0; lev <= finest_level; ++lev) {
     if(AMREX_SPACEDIM<3){
          AddDummyZAxis(root);
     }
-    node.print();
     
 
 
