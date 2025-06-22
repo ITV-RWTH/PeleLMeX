@@ -114,13 +114,9 @@ getTransportCoeff(
 #if defined(H2_ID) && \
     defined(            \
     H_ID) // Soret coefficient scaling, see Howarth, Day, Pitsch & Aspden
-    for (int n = 0; n < NUM_LITE_SPECIES; ++n){
-      if (H2_ID == liteIdx[n]){
-        rhotheta(i, j, k, n) *= 0.664;
-      } else if (H_ID == liteIdx[n]){
-        rhotheta(i, j, k, n) *= 0.58;
-      }  
-      // 202506 
+      rhotheta(i, j, k, H2_lite_idx) *= 0.664;
+      rhotheta(i, j, k, H_lite_idx) *= 0.58;
+      // 202506**
     }
 #else
     amrex::Abort("Running with Soret without light species, waste of time "
