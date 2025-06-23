@@ -114,8 +114,8 @@ getTransportCoeff(
 #if defined(H2_ID) && \
     defined(            \
     H_ID) // Soret coefficient scaling, see Howarth, Day, Pitsch & Aspden
-      rhotheta(i, j, k, H2_lite_idx) *= 0.664;
-      rhotheta(i, j, k, H_lite_idx) *= 0.58;
+      rhotheta(i, j, k, H2_LITE_IDX) *= 0.664;
+      rhotheta(i, j, k, H_LITE_IDX) *= 0.58;
       // 202506**
     }
 #else
