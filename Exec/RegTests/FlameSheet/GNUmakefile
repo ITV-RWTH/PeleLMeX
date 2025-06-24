@@ -14,7 +14,7 @@ MEM_PROFILE = FALSE
 USE_GPROF = FALSE
 
 # Performance
-USE_MPI = TRUE
+USE_MPI = FALSE
 USE_OMP = FALSE
 USE_CUDA = FALSE
 USE_HIP = FALSE
@@ -43,4 +43,6 @@ else
 endif
 
 PELE_HOME ?= ../../..
+#PELE_PHYSICS_HOME = ../../../Submodules/PelePhysics/
+PELE_PHYSICS_HOME = ../../../../PelePhysics/
 include $(PELE_HOME)/Exec/Make.PeleLMeX

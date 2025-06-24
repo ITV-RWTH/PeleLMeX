@@ -1187,7 +1187,7 @@ PeleLM::differentialDiffusionUpdate(
             liteIdx]
             AMREX_GPU_DEVICE(int i, int j, int k, int n) noexcept {
               flux_spec(i, j, k, liteIdx[n]) += flux_soret(i, j, k, liteIdx[n]);
-             // 202506* is this even legal?
+             // 202506
             });
         }
       }

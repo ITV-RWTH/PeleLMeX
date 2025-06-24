@@ -27,6 +27,7 @@ prob.standoff = -.023
 prob.pertmag = 0.00045
 prob.pertlength = 0.016
 pmf.datafile = "drm19_pmf.dat"
+transport.use_soret=1
 
 #---------------------- PeleLMeX CONTROL -------------------------
 peleLM.v = 1                              # PeleLMeX verbose
@@ -42,8 +43,8 @@ peleLM.do_mass_balance = 1                # Compute mass balance
 peleLM.do_species_balance = 1             # Compute species balance
 
 #---------------------- Time Stepping CONTROL --------------------
-amr.max_step = 20                         # Maximum number of time steps
-amr.stop_time = 0.001                     # final simulation physical time
+amr.max_step = 80                         # Maximum number of time steps
+amr.stop_time = 0.004                     # final simulation physical time
 amr.max_wall_time = 0.1                   # Maximum simulation run time
 amr.cfl = 0.5                             # CFL number for hyperbolic system
 amr.dt_shrink = 0.001                     # Scale back initial timestep
@@ -53,7 +54,7 @@ amr.dt_change_max = 1.1                   # Maximum dt increase btw successive s
 #amr.restart = chk00050                   # Restart checkpoint file
 #amr.check_int = 2000                     # Frequency of checkpoint output
 amr.plot_int = 100                        # Frequency of pltfile output
-amr.derive_plot_vars = avg_pressure mag_vort mass_fractions mixture_fraction progress_variable
+amr.derive_plot_vars = avg_pressure mag_vort mass_fractions mixture_fraction progress_variable diffcoeff
 
 #---------------------- Derived CONTROLS -------------------------
 peleLM.fuel_name = CH4
