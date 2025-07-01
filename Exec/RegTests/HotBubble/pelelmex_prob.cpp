@@ -24,15 +24,6 @@ PeleLM::readProbParm() // NOLINT(readability-make-member-function-const)
 }
 
 void
-PeleLM::updateProbParm()
+PeleLM::freeProbParm()
 {
-  amrex::ParmParse pp("prob");
-  pp.addfile("Control.inp");
-
-  pp.query("T_center", PeleLM::prob_parm->T_center); 
-  pp.query("T_coflow", PeleLM::prob_parm->T_coflow);
-  pp.query("V_mean", PeleLM::prob_parm->V_mean);
-  pp.query("V_coflow", PeleLM::prob_parm->V_coflow);
-  pp.query("phi", PeleLM::prob_parm->phi);
-
 }
