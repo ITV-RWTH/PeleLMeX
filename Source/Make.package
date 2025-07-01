@@ -42,6 +42,7 @@ CEXE_sources += PeleLMeX_Diagnostics.cpp
 CEXE_sources += PeleLMeX_FlowController.cpp
 CEXE_sources += PeleLMeX_DeriveUserDefined.cpp
 CEXE_sources += PeleLMeX_BPatch.cpp
+CEXE_sources += PeleLMeX_Feedback.cpp
 
 ifeq ($(USE_SOOT), TRUE)
   CEXE_sources += PeleLMeX_Soot.cpp
@@ -57,4 +58,8 @@ endif
 
 ifeq ($(USE_PARTICLES), TRUE)
   CEXE_sources += PeleLMeX_SprayParticles.cpp
+endif
+
+ifeq ($(USE_CATALYST), TRUE)
+  CEXE_sources += PeleLMeX_Catalyst.cpp
 endif

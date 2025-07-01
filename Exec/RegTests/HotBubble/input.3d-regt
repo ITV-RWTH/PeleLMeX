@@ -42,12 +42,12 @@ peleLM.deltaT_verbose = 1
 
 #amr.restart = chk00005
 #amr.check_int = 2000
-amr.plot_int = 500
+amr.plot_int = 1
 amr.plot_file = plt3d
-amr.max_step = 500
+amr.max_step = 100
 amr.dt_shrink = 1.0
 #amr.fixed_dt = 0.0001
-amr.stop_time = 0.07
+#amr.stop_time = 0.07
 amr.cfl = 0.5
 amr.derive_plot_vars = avg_pressure mag_vort mass_fractions
 
@@ -83,3 +83,19 @@ amr.gtemp.field_name    = temp
 #amrex.fpe_trap_invalid = 1
 #amrex.fpe_trap_zero = 1
 #amrex.fpe_trap_overflow = 1
+
+amr.plot_file = "./4Node8Task/plt"
+amr.check_file = "./4Node8Task/chk"
+
+catalyst.do_inSitu_Visualization=1
+catalyst.do_inSitu_Steering=0
+catalyst.inSitu_plot_int=1
+catalyst.inSitu_Steering_int=1
+#catalyst.script_paths = "/p/project/h2index/kim17/sk_inSitu_Visualisation/PeleLMeX/Exec/RegTests/HotBubble/catalyst_png_dumping.py"
+
+
+#catalyst.script_paths = "/p/project/h2index/kim17/sk_inSitu_Visualisation/pele_plugins/Cases/ControlledBunsen/catalyst_steering.py"
+#catalyst.script_paths = "/p/project/h2index/kim17/sk_inSitu_Visualisation/pele_plugins/Cases/ControlledBunsen/catalyst_png_dumping.py"
+
+#catalyst.proxy_paths = "/p/project/h2index/kim17/sk_inSitu_Visualisation/pele_plugins/Cases/ControlledBunsen/proxy.xml"
+catalyst.script_paths = test.py

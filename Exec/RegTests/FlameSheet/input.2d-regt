@@ -42,9 +42,9 @@ peleLM.do_mass_balance = 1                # Compute mass balance
 peleLM.do_species_balance = 1             # Compute species balance
 
 #---------------------- Time Stepping CONTROL --------------------
-amr.max_step = 20                         # Maximum number of time steps
-amr.stop_time = 0.001                     # final simulation physical time
-amr.max_wall_time = 0.1                   # Maximum simulation run time
+amr.max_step = 1                        # Maximum number of time steps
+amr.stop_time = 0.01                     # final simulation physical time
+#amr.max_wall_time = 0.1                  # Maximum simulation run time
 amr.cfl = 0.5                             # CFL number for hyperbolic system
 amr.dt_shrink = 0.001                     # Scale back initial timestep
 amr.dt_change_max = 1.1                   # Maximum dt increase btw successive steps
@@ -88,3 +88,6 @@ amr.yH.field_name    = Y(H)
 #amrex.fpe_trap_invalid = 1
 #amrex.fpe_trap_zero = 1
 #amrex.fpe_trap_overflow = 1
+
+#---------------------- In-Situ Visualisation CONTROL-------------------------
+catalyst.script_paths = "catalyst_png_dumping.py"

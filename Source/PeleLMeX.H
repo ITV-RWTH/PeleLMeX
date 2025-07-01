@@ -39,6 +39,12 @@
 #include <PeleLMRad.H>
 #endif
 
+#ifdef PELE_USE_CATALYST
+#include <AMReX_Conduit_Blueprint.H>
+#include <conduit/conduit.hpp>
+#include <catalyst.hpp>
+#endif
+
 // Forward declarations
 #ifdef PELE_USE_SPRAY
 class SprayParticleContainer;
@@ -116,6 +122,9 @@ public:
   // ReadIOParameters
   void readIOParameters();
 
+  // readInSituParameters
+  void readInSituParameters();
+
   // ReadProblemParameters
   void readProbParm();
   void freeProbParm();
@@ -138,6 +147,28 @@ public:
   void SprayInit();
 #endif
 
+#ifdef PELE_USE_CATALYST
+  // Initialize Catalyst
+  void CatalystInit();
+  
+  // Catalyst Execute 
+  void CatalystExecute();
+
+  // Finalize Catalyst
+  void CatalystFinalize();
+
+  // Convert 2D Conduit nodes to 3D
+  void AddDummyZAxis(conduit::Node &meshData);
+
+  void CatalystSteering();
+
+  void compute_local_phi(std::vector<double> phi);
+
+  void EmptyFieldData(const std::vector<std::string>& field_names, conduit::Node& node);
+
+  void Feedback();
+  void Regler(double&, double&, double&, double&, double&);
+#endif
   // VariablesSetup
   void variablesSetup();
 
@@ -1012,6 +1043,22 @@ public:
     const amrex::Vector<const amrex::MultiFab*>& a_MF,
     const std::string& pltname);
   //-----------------------------------------------------------------------------
+
+  //-----------------------------------------------------------------------------
+  // In-Situ
+  int do_inSitu_Visualization;
+  int inSitu_plot_int; 
+  int do_inSitu_Steering;
+  int inSitu_Steering_int=1;
+  double max_temp;
+  double steering_dt;
+  std::vector<double> phiSteering;
+  double next_time;
+
+
+
+
+   //-----------------------------------------------------------------------------
 
   //-----------------------------------------------------------------------------
   // Diagnostics

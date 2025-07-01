@@ -12,6 +12,9 @@ PeleLM::Evolve()
 
   int plt_justDidIt = 0;
   int chk_justDidIt = 0;
+#ifdef PELE_USE_CATALYST
+  CatalystInit();
+#endif
 
   while (!do_not_evolve) {
 
@@ -63,6 +66,18 @@ PeleLM::Evolve()
     int is_restart = 0;
     activeControl(is_restart);
 
+    //Feedback();
+    // Active prob parms
+    bool update_prob_parm = checkMessage("update_prob_parm");
+    if (update_prob_parm) {
+      if (m_verbose > 0) {
+        amrex::Print() << " Update prob_parm \n";
+      }
+      //Feedback();
+      updateProbParm();
+      Gpu::copy(Gpu::hostToDevice, prob_parm, prob_parm + 1, prob_parm_d);
+    }
+
     // Temporals
     if (doTemporalsNow()) {
       writeTemporals();
@@ -87,6 +102,24 @@ PeleLM::Evolve()
       chk_justDidIt = 1;
     }
 
+  #ifdef PELE_USE_CATALYST
+  if(do_inSitu_Visualization && m_nstep%inSitu_plot_int==0){
+    CatalystExecute();
+  }
+  if(do_inSitu_Steering) {
+    //if(m_cur_time > inSitu_Steering_int)
+    // if(m_nstep % inSitu_Steering_int == 0) 
+    // {
+    //   CatalystSteering();
+    // }
+    if(m_cur_time > next_time)
+    {
+      CatalystSteering();
+    }
+    
+  }
+  #endif
+
     // Check for the end of the simulation
     bool over_max_wall_time = false;
     if (m_max_wall_time > 0.0) {
@@ -106,6 +139,10 @@ PeleLM::Evolve()
        (m_stop_time >= 0.0 && m_cur_time >= m_stop_time - 1.0e-12 * m_dt) ||
        (m_dt < m_min_dt) || over_max_wall_time || dump_and_stop);
   }
+
+#ifdef PELE_USE_CATALYST
+  CatalystFinalize();
+#endif
 
   if (m_verbose > 0) {
     amrex::Print() << "\n >> Final simulation time: " << m_cur_time << "\n";
@@ -233,6 +270,8 @@ PeleLM::checkMessage(const std::string& a_action) const
     action_file = "plt_and_continue";
   } else if (a_action == "chk_and_continue") {
     action_file = "chk_and_continue";
+  } else if (a_action == "update_prob_parm") {
+    action_file = "update_prob_parm";  
   } else {
     Abort("Unknown action in checkMessage()");
   }

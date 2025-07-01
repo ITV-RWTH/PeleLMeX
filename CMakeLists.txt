@@ -21,6 +21,7 @@ option(PELE_ENABLE_TINY_PROFILE "Enable tiny profiler in AMReX" OFF)
 option(PELE_ENABLE_HDF5 "Enable plot file output using HDF5" OFF)
 option(PELE_ENABLE_HDF5_ZFP "Enable ZFP compression in HDF5" OFF)
 option(PELE_ENABLE_ASCENT "Enable Ascent in-situ visualization" OFF)
+option(PELE_ENABLE_CATALYST "Enable Catalyst in-situ visualization" OFF)
 option(PELE_ENABLE_HYPRE "Enable Offload to Hypre" OFF)
 set(PELE_PRECISION "DOUBLE" CACHE STRING "Floating point precision SINGLE or DOUBLE")
 
