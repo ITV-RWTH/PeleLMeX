@@ -55,7 +55,7 @@ getTransportCoeff(
   amrex::Real lambda_cgs = 0.0_rt;
   amrex::Real mu_cgs = 0.0_rt;
   amrex::Real dummy_xi = 0.0_rt;
-  amrex::Real chi_loc[NUM_SPECIES] = {0.0};
+  amrex::Real chi_loc[NUM_LITE_SPECIES] = {0.0};
   amrex::Real Tloc = T(i, j, k);
 
   bool get_xi = false; // always ignore bulk viscosity
@@ -67,7 +67,6 @@ getTransportCoeff(
   trans.transport(
     get_xi, get_mu, get_lam, get_Ddiag, get_chi, Tloc, rho, y, rhoDi_cgs,
     chi_loc, mu_cgs, dummy_xi, lambda_cgs, trans_parm);
-  // mapping the light species
   int liteIdx[NUM_LITE_SPECIES];
   egtransetKTDIF(liteIdx);
 
@@ -103,25 +102,10 @@ getTransportCoeff(
     }
 
     if (do_soret){
-
       for (int n = 0; n < NUM_LITE_SPECIES; ++n){
-        rhotheta(i, j, k, n) = -rhoDi_cgs[liteIdx[n]] * 1.0e-1_rt * chi_loc[liteIdx[n]];
+        rhotheta(i, j, k, n) = -rhoDi_cgs[liteIdx[n]] * 1.0e-1_rt * chi_loc[n];
       }
-      // 202506 : This is change number one.
     }  
-  }
-  if (do_soret) {
-#if defined(H2_ID) && \
-    defined(            \
-    H_ID) // Soret coefficient scaling, see Howarth, Day, Pitsch & Aspden
-      rhotheta(i, j, k, H2_LITE_IDX) *= 0.664;
-      rhotheta(i, j, k, H_LITE_IDX) *= 0.58;
-      // 202506**
-#else
-    amrex::Abort("Running with Soret without light species, waste of time "
-                 "and memory..."
-                 "you should feel ashamed"); 
-#endif
   }
 }
 

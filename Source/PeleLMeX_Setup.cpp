@@ -2,6 +2,7 @@
 #include <AMReX_ParmParse.H>
 #include <PeleLMeX_DeriveFunc.H>
 #include <PeleLMeX_BPatch.H>
+#include "AMReX_Print.H"
 #include "PelePhysics.H"
 #include "mechanism.H"
 #include <AMReX_buildInfo.H>
@@ -103,8 +104,12 @@ PeleLM::Setup()
         if (m_use_soret == 0) {
           amrex::Print() << "    Using mixture-averaged transport" << std::endl;
         } else {
-          amrex::Print()
-            << "    Using mixture-averaged transport with Soret effects"
+          #if !defined(H2_ID) && !defined(H_ID) 
+            amrex::Abort("Running with Soret without light species, waste of time "
+                         "and memory..."
+                         "you should feel ashamed");
+          #endif
+          amrex::Print() << "    Using mixture-averaged transport with Soret effects"
             << std::endl;
           if (m_soret_boundary_override != 0) {
             amrex::Print()
@@ -1089,16 +1094,13 @@ PeleLM::derivedSetup()
       int lightIdx[NUM_LITE_SPECIES];
       egtransetKTDIF(lightIdx);
 
-      var_names_massfrac.resize(NUM_LITE_SPECIES * NUM_SPECIES);
+      var_names_massfrac.resize(NUM_LITE_SPECIES + NUM_SPECIES);
       for (int n = 0; n < NUM_LITE_SPECIES; n++) {
         var_names_massfrac[n + NUM_SPECIES] = "theta_" + spec_names[lightIdx[n]];
       }
       derive_lst.add(
-        "diffcoeff", IndexType::TheCellType(), NUM_LITE_SPECIES * NUM_SPECIES,
+        "diffcoeff", IndexType::TheCellType(), NUM_LITE_SPECIES + NUM_SPECIES,
         var_names_massfrac, pelelmex_derdiffc, the_same_box);
-      // 202506*
-      // I think the names will be fucked up
-      // I think you fixed that
     } else {
       derive_lst.add(
         "diffcoeff", IndexType::TheCellType(), NUM_SPECIES, var_names_massfrac,

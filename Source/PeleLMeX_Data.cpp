@@ -40,7 +40,7 @@ PeleLM::LevelData::LevelData(
       divu.define(ba, dm, 1, 1, MFInfo(), factory);
     }
     if (a_use_soret != 0) {
-      diff_cc.define(ba, dm, NUM_SPECIES + NUM_LITE_SPECIES + 2, 1, MFInfo(), factory); // 202506
+      diff_cc.define(ba, dm, NUM_SPECIES + NUM_LITE_SPECIES + 2, 1, MFInfo(), factory);
     } else {
       diff_cc.define(ba, dm, NUM_SPECIES + 2, 1, MFInfo(), factory);
     }
@@ -142,12 +142,12 @@ PeleLM::AdvanceDiffData::AdvanceDiffData(
       }
       if (a_use_soret != 0) {
         DT[lev].define(
-          ba[lev], dm[lev], NUM_SPECIES, nGrowAdv, MFInfo(), *factory[lev]); // 202506
+          ba[lev], dm[lev], NUM_LITE_SPECIES, nGrowAdv, MFInfo(), *factory[lev]);
         for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
           const BoxArray& faceba =
             amrex::convert(ba[lev], IntVect::TheDimensionVector(idim));
           soret_fluxes[lev][idim].define(
-            faceba, dm[lev], NUM_LITE_SPECIES, 0, MFInfo(), *factory[lev]); // 202506
+            faceba, dm[lev], NUM_LITE_SPECIES, 0, MFInfo(), *factory[lev]);
         }
       }
     }
