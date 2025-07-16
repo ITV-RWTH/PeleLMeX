@@ -350,13 +350,10 @@ PeleLM::correctIsothermalBoundary(
         soretfluxes[lev][idim] = new MultiFab(
           grids[lev], dmap[lev], NUM_LITE_SPECIES, 1, MFInfo(), Factory(lev));
         soretfluxes[lev][idim]->setVal(0.0);
-        dummyName[lev][idim] = new MultiFab(
-          grids[lev], dmap[lev], NUM_SPECIES, 1, MFInfo(), Factory(lev));
-        dummyName[lev][idim]->setVal(0.0);
       }
     }
     addSoretTerm(
-      dummyName, soretfluxes, GetVecOfConstPtrs(getTempVect(a_time)),
+      {}, soretfluxes, GetVecOfConstPtrs(getTempVect(a_time)),
       GetVecOfConstPtrs(getDiffusivityVect(a_time)));
   } else { // have the lagged ones, alias to them
     for (int lev = 0; lev <= finest_level; lev++) {
@@ -798,6 +795,7 @@ PeleLM::addSoretTerm(
   //------------------------------------------------------------------------
   // if a container for soret fluxes is provided, fill it
   int need_soret_fluxes = (a_spsoretfluxes.empty()) ? 0 : 1;
+  int need_species_fluxes = (a_spfluxes.empty()) ? 0 : 1;
 
   //------------------------------------------------------------------------
   // Compute T gradients and do average down to get gradients consistent across
@@ -881,22 +879,30 @@ PeleLM::addSoretTerm(
               : a_spfluxes[lev][idim]->array(mfi); // Dummy unused Array4
           // Soret flux is : - rho * D_m * chi_m * \nabla T / T
           // with beta_m = rho * D_m * chi_m below
-          amrex::ParallelFor(
-            ebx,
-            [need_soret_fluxes, gradT_ar, beta_ar, T, spFlux_ar,
-             spsoretFlux_ar, liteIdx] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-              for (int n = 0; n < NUM_LITE_SPECIES; n++) {
-                spFlux_ar(i, j, k, liteIdx[n]) -=
-                  beta_ar(i, j, k, n) * gradT_ar(i, j, k) / T(i, j, k);
+          if (need_species_fluxes != 0) {
+            amrex::ParallelFor(
+              ebx,
+              [gradT_ar, beta_ar, T, spFlux_ar,
+               liteIdx] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+                for (int n = 0; n < NUM_LITE_SPECIES; n++) {
+                  spFlux_ar(i, j, k, liteIdx[n]) -=
+                    beta_ar(i, j, k, n) * gradT_ar(i, j, k) / T(i, j, k);
+                }
               }
+            );
+         }
+          if (need_soret_fluxes != 0) {
+            amrex::ParallelFor(
+              ebx,
+              [gradT_ar, beta_ar, T,
+              spsoretFlux_ar] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
 
-              if (need_soret_fluxes != 0) {
                 for (int n = 0; n < NUM_LITE_SPECIES; n++) {
                   spsoretFlux_ar(i, j, k, n) =
                     -beta_ar(i, j, k, n) * gradT_ar(i, j, k) / T(i, j, k);
                 }
-              }
             });
+          }
         }
       }
     }
