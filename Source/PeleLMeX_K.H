@@ -25,10 +25,10 @@ getTransportCoeff(
   amrex::Array4<amrex::Real> const& lambda,
   amrex::Array4<amrex::Real> const& mu,
   pele::physics::transport::TransParm<
-  pele::physics::PhysicsType::eos_type,
-  pele::physics::PhysicsType::transport_type> const* trans_parm,
+    pele::physics::PhysicsType::eos_type,
+    pele::physics::PhysicsType::transport_type> const* trans_parm,
   pele::physics::eos::EosParm<pele::physics::PhysicsType::eos_type> const*
-  eosparm) noexcept
+    eosparm) noexcept
 {
   using namespace amrex::literals;
 
@@ -66,7 +66,7 @@ getTransportCoeff(
   auto trans = pele::physics::PhysicsType::transport();
   trans.transport(
     get_xi, get_mu, get_lam, get_Ddiag, get_chi, Tloc, rho, y, rhoDi_cgs,
-    chi_loc, mu_cgs, dummy_xi, lambda_cgs, trans_parm);
+    chi_loc, mu_cgs, dummy_xi, lambda_cgs, trans_parm); // chi_loc is scaled
   int liteIdx[NUM_LITE_SPECIES];
   egtransetKTDIF(liteIdx);
 
@@ -101,11 +101,11 @@ getTransportCoeff(
       rhoDi(i, j, k, n) = rhoDi_cgs[n] * Wbar * mwtinv[n] * 1.0e-1_rt;
     }
 
-    if (do_soret){
-      for (int n = 0; n < NUM_LITE_SPECIES; ++n){
+    if (do_soret) {
+      for (int n = 0; n < NUM_LITE_SPECIES; ++n) {
         rhotheta(i, j, k, n) = -rhoDi_cgs[liteIdx[n]] * 1.0e-1_rt * chi_loc[n];
       }
-    }  
+    }
   }
 }
 
@@ -1355,10 +1355,14 @@ getTurbViscSigma(
     // Singular values:
     amrex::Real sigma1 = std::sqrt(
       std::max(0.0, I[0] / 3.0 + 2.0 * std::sqrt(alpha1) * std::cos(alpha3)));
-    amrex::Real sigma2 = std::sqrt(std::max(
-      0.0, I[0] / 3.0 - 2.0 * std::sqrt(alpha1) * std::cos(Pi / 3.0 + alpha3)));
-    amrex::Real sigma3 = std::sqrt(std::max(
-      0.0, I[0] / 3.0 - 2.0 * std::sqrt(alpha1) * std::cos(Pi / 3.0 - alpha3)));
+    amrex::Real sigma2 = std::sqrt(
+      std::max(
+        0.0,
+        I[0] / 3.0 - 2.0 * std::sqrt(alpha1) * std::cos(Pi / 3.0 + alpha3)));
+    amrex::Real sigma3 = std::sqrt(
+      std::max(
+        0.0,
+        I[0] / 3.0 - 2.0 * std::sqrt(alpha1) * std::cos(Pi / 3.0 - alpha3)));
 
     // Sort
     sigma2 = std::max(sigma3, sigma2);

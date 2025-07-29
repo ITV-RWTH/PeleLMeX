@@ -1,4 +1,3 @@
-#include "mechanism.H"
 #include <PeleLMeX.H>
 #include <AMReX_PlotFileUtil.H>
 #include <memory>
