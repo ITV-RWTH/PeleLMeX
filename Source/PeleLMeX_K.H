@@ -977,7 +977,7 @@ buildDiffusionForcing(
   amrex::Array4<amrex::Real> const& forceT,
   amrex::Array4<const amrex::Real> const& dwbar,
   amrex::Array4<const amrex::Real> const& dT,
-  int (&liteIdx)[NUM_LITE_SPECIES],
+  const int (&liteIdx)[NUM_LITE_SPECIES],
   amrex::Array4<const amrex::Real> const& extRhoY,
   amrex::Array4<const amrex::Real> const& extRhoH,
   int use_wbar,
@@ -1011,9 +1011,9 @@ buildDiffusionForcing(
   if (closed_chamber == 1) {
     forceT(i, j, k) += dp0dt;
   }
-  
+
   if (use_soret != 0) {
-    for (int n =, n < NUM_LITE_SPECIES, ++n) {
+    for (int n = 0; n < NUM_LITE_SPECIES; ++n) {
       forceY(i, j, k, liteIdx[n]) += dT(i, j, k, n);
     }
   }
@@ -1406,14 +1406,10 @@ getTurbViscSigma(
     // Singular values:
     amrex::Real sigma1 = std::sqrt(
       std::max(0.0, I[0] / 3.0 + 2.0 * std::sqrt(alpha1) * std::cos(alpha3)));
-    amrex::Real sigma2 = std::sqrt(
-      std::max(
-        0.0,
-        I[0] / 3.0 - 2.0 * std::sqrt(alpha1) * std::cos(Pi / 3.0 + alpha3)));
-    amrex::Real sigma3 = std::sqrt(
-      std::max(
-        0.0,
-        I[0] / 3.0 - 2.0 * std::sqrt(alpha1) * std::cos(Pi / 3.0 - alpha3)));
+    amrex::Real sigma2 = std::sqrt(std::max(
+      0.0, I[0] / 3.0 - 2.0 * std::sqrt(alpha1) * std::cos(Pi / 3.0 + alpha3)));
+    amrex::Real sigma3 = std::sqrt(std::max(
+      0.0, I[0] / 3.0 - 2.0 * std::sqrt(alpha1) * std::cos(Pi / 3.0 - alpha3)));
 
     // Sort
     sigma2 = std::max(sigma3, sigma2);

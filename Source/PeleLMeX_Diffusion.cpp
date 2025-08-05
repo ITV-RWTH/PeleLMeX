@@ -1321,10 +1321,10 @@ PeleLM::differentialDiffusionUpdate(
                                 : DummyFab.const_array();
       amrex::ParallelFor(
 
-        bx, [rhoY, dhat, force, dwbar, dT, aux, dhat_aux, force_aux,
-             nAux = m_nAux, dt = m_dt, use_wbar = m_use_wbar,
-             use_soret = m_use_soret,
-             liteIdx] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+        bx,
+        [rhoY, dhat, force, dwbar, dT, aux, dhat_aux, force_aux, nAux = m_nAux,
+         dt = m_dt, use_wbar = m_use_wbar, use_soret = m_use_soret,
+         liteIdx] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
           for (int n = 0; n < NUM_SPECIES; ++n) {
             rhoY(i, j, k, n) = force(i, j, k, n) + dt * dhat(i, j, k, n);
             if (use_wbar != 0) {
@@ -1334,7 +1334,7 @@ PeleLM::differentialDiffusionUpdate(
           if (use_soret != 0) {
             for (int n = 0; n < NUM_LITE_SPECIES; ++n) {
               rhoY(i, j, k, liteIdx[n]) -= dt * dT(i, j, k, n);
-            } 
+            }
           }
           for (int n = 0; n < nAux; n++) {
             aux(i, j, k, n) = force_aux(i, j, k, n) + dt * dhat_aux(i, j, k, n);
@@ -1720,15 +1720,17 @@ PeleLM::getScalarDiffForce(
                                 ? diffData->Dnp1_aux[lev].const_array(mfi, 0)
                                 : DummyFab.const_array();
       amrex::ParallelFor(
-        bx, [dn, ddn, dnp1k, ddnp1k, do_react = m_do_react, r, a, extRhoY,
-             extRhoH, dwbar, dT, use_wbar = m_use_wbar, use_soret = m_use_soret,
-             fY, fT, fAux, a_aux, dn_aux, dnp1k_aux, aux_advect_d,
-             aux_diffuse_d, dp0dt = m_dp0dt, is_closed_ch = m_closed_chamber,
-             nAux = m_nAux, liteIdx] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+        bx,
+        [dn, ddn, dnp1k, ddnp1k, do_react = m_do_react, r, a, extRhoY, extRhoH,
+         dwbar, dT, use_wbar = m_use_wbar, use_soret = m_use_soret, fY, fT,
+         fAux, a_aux, dn_aux, dnp1k_aux, aux_advect_d, aux_diffuse_d,
+         dp0dt = m_dp0dt, is_closed_ch = m_closed_chamber, nAux = m_nAux,
+         liteIdx] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
           buildDiffusionForcing(
             i, j, k, dn, ddn, dnp1k, ddnp1k, r, a, dp0dt, is_closed_ch,
-            do_react, fY, fT, dwbar, dT, liteIdx, extRhoY, extRhoH, use_wbar, use_soret,
-            fAux, a_aux, dn_aux, dnp1k_aux, aux_advect_d, aux_diffuse_d, nAux);
+            do_react, fY, fT, dwbar, dT, liteIdx, extRhoY, extRhoH, use_wbar,
+            use_soret, fAux, a_aux, dn_aux, dnp1k_aux, aux_advect_d,
+            aux_diffuse_d, nAux);
         });
     }
   }
@@ -1838,9 +1840,9 @@ PeleLM::getDiffusionTensorOpBC(
   Vector<Array<LinOpBCType, AMREX_SPACEDIM>> r(AMREX_SPACEDIM);
   for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
     if (Geom(0).isPeriodic(idim)) {
-      AMREX_D_TERM(
-        r[0][idim] = LinOpBCType::Periodic;, r[1][idim] = LinOpBCType::Periodic;
-        , r[2][idim] = LinOpBCType::Periodic;);
+      AMREX_D_TERM(r[0][idim] = LinOpBCType::Periodic;
+                   , r[1][idim] = LinOpBCType::Periodic;
+                   , r[2][idim] = LinOpBCType::Periodic;);
     } else {
       for (int dir = 0; dir < AMREX_SPACEDIM; dir++) {
         auto amrexbc = (a_side == Orientation::low) ? a_bc[dir].lo(idim)
