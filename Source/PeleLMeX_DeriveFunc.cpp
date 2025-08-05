@@ -286,9 +286,10 @@ pelelmex_dermgvort(
   int /*level*/)
 
 {
-  AMREX_D_TERM(const amrex::Real idx = geom.InvCellSize(0);
-               , const amrex::Real idy = geom.InvCellSize(1);
-               , const amrex::Real idz = geom.InvCellSize(2););
+  AMREX_D_TERM(
+    const amrex::Real idx = geom.InvCellSize(0);
+    , const amrex::Real idy = geom.InvCellSize(1);
+    , const amrex::Real idz = geom.InvCellSize(2););
 
   auto const& dat_arr = statefab.const_array();
   auto const& vort_arr = derfab.array(dcomp);
@@ -448,9 +449,10 @@ pelelmex_dervort(
   AMREX_ASSERT(derfab.box().contains(bx));
   AMREX_ASSERT(statefab.box().contains(bx));
   AMREX_ASSERT(derfab.nComp() >= dcomp + ncomp);
-  AMREX_D_TERM(const amrex::Real idx = geom.InvCellSize(0);
-               , const amrex::Real idy = geom.InvCellSize(1);
-               , const amrex::Real idz = geom.InvCellSize(2););
+  AMREX_D_TERM(
+    const amrex::Real idx = geom.InvCellSize(0);
+    , const amrex::Real idy = geom.InvCellSize(1);
+    , const amrex::Real idz = geom.InvCellSize(2););
 
   auto const& dat_arr = statefab.const_array();
   auto const& vort_arr = derfab.array(dcomp);
@@ -622,9 +624,10 @@ pelelmex_dercoord(
   amrex::ignore_unused(ncomp);
   AMREX_ASSERT(derfab.box().contains(bx));
   AMREX_ASSERT(derfab.nComp() >= dcomp + ncomp);
-  AMREX_D_TERM(const amrex::Real dx = geom.CellSize(0);
-               , const amrex::Real dy = geom.CellSize(1);
-               , const amrex::Real dz = geom.CellSize(2););
+  AMREX_D_TERM(
+    const amrex::Real dx = geom.CellSize(0);
+    , const amrex::Real dy = geom.CellSize(1);
+    , const amrex::Real dz = geom.CellSize(2););
 
   auto const& coord_arr = derfab.array(dcomp);
   const auto geomdata = geom.data();
@@ -708,9 +711,10 @@ pelelmex_derQcrit(
 
 {
 #if AMREX_SPACEDIM == 3
-  AMREX_D_TERM(const amrex::Real idx = geom.InvCellSize(0);
-               , const amrex::Real idy = geom.InvCellSize(1);
-               , const amrex::Real idz = geom.InvCellSize(2););
+  AMREX_D_TERM(
+    const amrex::Real idx = geom.InvCellSize(0);
+    , const amrex::Real idy = geom.InvCellSize(1);
+    , const amrex::Real idz = geom.InvCellSize(2););
 
   auto const& dat_arr = statefab.const_array();
   auto const& qcrit_arr = derfab.array(dcomp);
@@ -977,9 +981,10 @@ pelelmex_derenstrophy(
   int /*level*/)
 
 {
-  AMREX_D_TERM(const amrex::Real idx = geom.InvCellSize(0);
-               , const amrex::Real idy = geom.InvCellSize(1);
-               , const amrex::Real idz = geom.InvCellSize(2););
+  AMREX_D_TERM(
+    const amrex::Real idx = geom.InvCellSize(0);
+    , const amrex::Real idy = geom.InvCellSize(1);
+    , const amrex::Real idz = geom.InvCellSize(2););
 
   auto const& dat_arr = statefab.const_array(VELX);
   auto const& rho_arr = (a_pelelm->m_incompressible) != 0
@@ -1459,6 +1464,47 @@ pelelmex_derdmap(
   amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
     der(i, j, k) = myrank;
   });
+}
+
+//
+// Turbulent forcing term
+//
+void
+pelelmex_derturbforcing(
+  PeleLM* a_pelelm,
+  const Box& bx,
+  FArrayBox& derfab,
+  int dcomp,
+  int ncomp,
+  const FArrayBox& statefab,
+  const FArrayBox& /*reactfab*/,
+  const FArrayBox& /*pressfab*/,
+  const Geometry& geom,
+  Real time,
+  const Vector<BCRec>& /*bcrec*/,
+  int /*level*/)
+{
+  AMREX_ASSERT(derfab.box().contains(bx));
+  AMREX_ASSERT(statefab.box().contains(bx));
+  AMREX_ASSERT(derfab.nComp() >= dcomp + ncomp);
+  AMREX_ASSERT(!a_pelelm->m_incompressible);
+
+  // Need geom for forcing
+  GeometryData const& geomdata = geom.data();
+  Array4<Real> const& der = derfab.array(dcomp);
+
+  // Set derfab to zero first
+  derfab.setVal<amrex::RunOn::Device>(0.0, bx, dcomp, ncomp);
+  FArrayBox DummyFab(bx, 1);
+
+  // Declare a pointer for the density array view
+  Array4<const Real> rho = (a_pelelm->m_incompressible != 0)
+                             ? DummyFab.const_array()
+                             : statefab.const_array(DENSITY);
+
+  // call the function above to construct the forcing
+  a_pelelm->turb_forcing.addTurbVelForces(
+    geomdata, bx, time, der, rho, a_pelelm->m_incompressible, a_pelelm->m_rho);
 }
 
 //

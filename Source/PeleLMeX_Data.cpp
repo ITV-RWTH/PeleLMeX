@@ -45,7 +45,7 @@ PeleLM::LevelData::LevelData(
       diff_cc.define(ba, dm, NUM_SPECIES + 2, 1, MFInfo(), factory);
     }
 
-#ifdef PELE_USE_EFIELD
+#ifdef PELE_USE_PLASMA
     diffE_cc.define(ba, dm, 1, 1, MFInfo(), factory);
     mobE_cc.define(ba, dm, 1, 1, MFInfo(), factory);
     mob_cc.define(ba, dm, NUM_IONS, 1, MFInfo(), factory);
@@ -53,6 +53,7 @@ PeleLM::LevelData::LevelData(
   }
   if (a_nAux > 0) {
     auxiliaries.define(ba, dm, a_nAux, a_nGrowState, MFInfo(), factory);
+    diff_aux_cc.define(ba, dm, a_nAux, 1, MFInfo(), factory);
   }
 }
 
@@ -62,14 +63,14 @@ PeleLM::LevelDataReact::LevelDataReact(
   const amrex::FabFactory<FArrayBox>& factory)
 {
   int IRsize = NUM_SPECIES;
-#ifdef PELE_USE_EFIELD
+#ifdef PELE_USE_PLASMA
   IRsize += 1;
 #endif
   I_R.define(ba, dm, IRsize, 0, MFInfo(), factory);
   functC.define(ba, dm, 1, 0, MFInfo(), factory);
 }
 
-#ifdef PELE_USE_EFIELD
+#ifdef PELE_USE_PLASMA
 PeleLM::LevelDataNLSolve::LevelDataNLSolve(
   amrex::BoxArray const& ba,
   amrex::DistributionMapping const& dm,
@@ -97,6 +98,7 @@ PeleLM::AdvanceDiffData::AdvanceDiffData(
   int nGrowAdv,
   int a_use_wbar,
   int a_use_soret,
+  int a_nAux,
   int is_init)
 {
   if (is_init != 0) { // All I need is a container for a single diffusion term
@@ -108,11 +110,24 @@ PeleLM::AdvanceDiffData::AdvanceDiffData(
       Dnp1[lev].define(
         ba[lev], dm[lev], NUM_SPECIES + 2, nGrowAdv, MFInfo(), *factory[lev]);
     }
+
+    if (a_nAux > 0) {
+      Dnp1_aux.resize(a_finestLevel + 1);
+      for (int lev = 0; lev <= a_finestLevel; lev++) {
+        Dnp1_aux[lev].define(
+          ba[lev], dm[lev], a_nAux, nGrowAdv, MFInfo(), *factory[lev]);
+      }
+    }
   } else {
     // Resize Vectors
     Dn.resize(a_finestLevel + 1);
     Dnp1.resize(a_finestLevel + 1);
     Dhat.resize(a_finestLevel + 1);
+    if (a_nAux > 0) {
+      Dn_aux.resize(a_finestLevel + 1);
+      Dnp1_aux.resize(a_finestLevel + 1);
+      Dhat_aux.resize(a_finestLevel + 1);
+    }
     if (a_use_wbar != 0) {
       Dwbar.resize(a_finestLevel + 1);
       wbar_fluxes.resize(a_finestLevel + 1);
@@ -151,6 +166,14 @@ PeleLM::AdvanceDiffData::AdvanceDiffData(
             faceba, dm[lev], NUM_LITE_SPECIES, 0, MFInfo(), *factory[lev]);
         }
       }
+      if (a_nAux > 0) {
+        Dn_aux[lev].define(
+          ba[lev], dm[lev], a_nAux, nGrowAdv, MFInfo(), *factory[lev]);
+        Dnp1_aux[lev].define(
+          ba[lev], dm[lev], a_nAux, nGrowAdv, MFInfo(), *factory[lev]);
+        Dhat_aux[lev].define(
+          ba[lev], dm[lev], a_nAux, nGrowAdv, MFInfo(), *factory[lev]);
+      }
     }
   }
 }
@@ -161,6 +184,7 @@ PeleLM::AdvanceAdvData::AdvanceAdvData(
   const amrex::Vector<amrex::DistributionMapping>& dm,
   const amrex::Vector<std::unique_ptr<amrex::FabFactory<FArrayBox>>>& factory,
   int a_incompressible,
+  int a_nAux,
   int nGrowAdv,
   int nGrowMAC)
 {
@@ -172,7 +196,11 @@ PeleLM::AdvanceAdvData::AdvanceAdvData(
     Forcing.resize(a_finestLevel + 1);
     mac_divu.resize(a_finestLevel + 1);
   }
-#ifdef PELE_USE_EFIELD
+  if (a_nAux > 0) {
+    AofS_aux.resize(a_finestLevel + 1);
+    Forcing_aux.resize(a_finestLevel + 1);
+  }
+#ifdef PELE_USE_PLASMA
   uDrift.resize(a_finestLevel + 1);
 #endif
 
@@ -183,7 +211,7 @@ PeleLM::AdvanceAdvData::AdvanceAdvData(
         amrex::convert(ba[lev], IntVect::TheDimensionVector(idim));
       umac[lev][idim].define(
         faceba, dm[lev], 1, nGrowMAC, MFInfo(), *factory[lev]);
-#ifdef PELE_USE_EFIELD
+#ifdef PELE_USE_PLASMA
       uDrift[lev][idim].define(
         faceba, dm[lev], NUM_IONS, nGrowMAC, MFInfo(), *factory[lev]);
 #endif
@@ -194,7 +222,7 @@ PeleLM::AdvanceAdvData::AdvanceAdvData(
     } else {
       AofS[lev].define(ba[lev], dm[lev], NVAR, 0, MFInfo(), *factory[lev]);
       chi[lev].define(ba[lev], dm[lev], 1, 1, MFInfo(), *factory[lev]);
-#ifdef PELE_USE_EFIELD
+#ifdef PELE_USE_PLASMA
       Forcing[lev].define(
         ba[lev], dm[lev], NUM_SPECIES + 2, nGrowAdv, MFInfo(),
         *factory[lev]); // Species + TEMP + nE
@@ -205,6 +233,12 @@ PeleLM::AdvanceAdvData::AdvanceAdvData(
 #endif
       mac_divu[lev].define(
         ba[lev], dm[lev], 1, nGrowAdv, MFInfo(), *factory[lev]);
+    }
+    if (a_nAux > 0) {
+      AofS_aux[lev].define(
+        ba[lev], dm[lev], a_nAux, 0, MFInfo(), *factory[lev]);
+      Forcing_aux[lev].define(
+        ba[lev], dm[lev], a_nAux, nGrowAdv, MFInfo(), *factory[lev]);
     }
   }
 }
@@ -227,6 +261,11 @@ PeleLM::copyStateNewToOld(int nGhost)
           m_leveldata_old[lev]->divu, m_leveldata_new[lev]->divu, 0, 0, 1,
           std::min(nGhost, 1));
       }
+    }
+    if (m_nAux > 0) {
+      MultiFab::Copy(
+        m_leveldata_old[lev]->auxiliaries, m_leveldata_new[lev]->auxiliaries, 0,
+        0, m_nAux, nGhost);
     }
   }
 }
@@ -262,6 +301,11 @@ PeleLM::copyStateOldToNew(int nGhost)
           std::min(nGhost, 1));
       }
     }
+    if (m_nAux > 0) {
+      MultiFab::Copy(
+        m_leveldata_new[lev]->auxiliaries, m_leveldata_old[lev]->auxiliaries, 0,
+        0, m_nAux, nGhost);
+    }
   }
 }
 
@@ -275,7 +319,7 @@ PeleLM::copyTransportOldToNew()
       MultiFab::Copy(
         m_leveldata_new[lev]->diff_cc, m_leveldata_old[lev]->diff_cc, 0, 0,
         NUM_SPECIES + 2, 1);
-#ifdef PELE_USE_EFIELD
+#ifdef PELE_USE_PLASMA
       MultiFab::Copy(
         m_leveldata_new[lev]->diffE_cc, m_leveldata_old[lev]->diffE_cc, 0, 0, 1,
         1);
@@ -287,6 +331,11 @@ PeleLM::copyTransportOldToNew()
         NUM_IONS, 1);
 #endif
     }
+    if (m_nAux > 0) {
+      MultiFab::Copy(
+        m_leveldata_new[lev]->diff_aux_cc, m_leveldata_old[lev]->diff_aux_cc, 0,
+        0, m_nAux, 1);
+    }
   }
 }
 
@@ -297,5 +346,24 @@ PeleLM::copyDiffusionOldToNew(std::unique_ptr<AdvanceDiffData>& diffData)
     MultiFab::Copy(
       diffData->Dnp1[lev], diffData->Dn[lev], 0, 0, NUM_SPECIES + 2,
       m_nGrowAdv);
+    if (m_nAux > 0) {
+      MultiFab::Copy(
+        diffData->Dnp1_aux[lev], diffData->Dn_aux[lev], 0, 0, m_nAux,
+        m_nGrowAdv);
+    }
   }
+}
+
+bool
+PeleLM::checkForNaNs()
+{
+  bool contains_nan = false;
+  for (int lev = 0; lev <= finest_level; lev++) {
+    if (
+      m_leveldata_new[lev]->state.contains_nan() ||
+      m_leveldata_new[lev]->state.contains_inf()) {
+      contains_nan = true;
+    }
+  }
+  return contains_nan;
 }
