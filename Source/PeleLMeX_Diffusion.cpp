@@ -451,9 +451,6 @@ PeleLM::correctIsothermalBoundary(
               for (int n = 0; n < NUM_LITE_SPECIES; ++n) {
                 boundary_ar(idx[0], idx[1], idx[2], liteIdx[n]) =
                   flux_soret(i, j, k, n);
-                std::cout << "FLUX_SORET AT: i:" << i << " j: " << j
-                          << " k: " << k << " n: " << n << " = "
-                          << flux_soret(i, j, k, n) << "\n";
               }
             }
           });
