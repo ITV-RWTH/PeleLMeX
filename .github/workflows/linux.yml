@@ -63,6 +63,18 @@ jobs:
       {CXXFLAGS: "-Werror -Wshadow -Woverloaded-virtual -Wunreachable-code"}
     steps:
     - uses: actions/checkout@v4
+    with:
+        fetch-depth: 0
+        submodules: recursive
+        persist-credentials: true
+        
+    - name: Update Submodules to Correct Branch
+      run: |
+        # damit branch-Feld in .gitmodules berücksichtigt wird
+        git submodule sync --recursive
+        # init + update alle submodule, benutze branch wenn in .gitmodules angegeben
+        git submodule update --init --recursive --remote
+        
     - name: System Dependencies
       run: .github/workflows/dependencies/dependencies_gcc10.sh
     - name: Repo Dependencies
