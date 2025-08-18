@@ -26,7 +26,6 @@ prob.P_mean = 101325.0
 prob.standoff = -.012
 prob.pertmag = 0.0004
 pmf.datafile = "dodecaneLu_pmf.dat"
-transport.use_soret = 1
 
 #-------------------------PeleLM CONTROL----------------------------
 peleLM.run_mode = evaluate
