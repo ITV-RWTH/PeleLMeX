@@ -113,6 +113,12 @@ PeleLM::Setup()
         if (m_use_soret == 0) {
           amrex::Print() << "    Using mixture-averaged transport" << std::endl;
         } else {
+#if !defined(H2_ID) && !defined(H_ID)
+          amrex::Abort(
+            "Running with Soret without light species, waste of time "
+            "and memory..."
+          );
+#endif
           amrex::Print()
             << "    Using mixture-averaged transport with Soret effects"
             << std::endl;
@@ -1163,12 +1169,18 @@ PeleLM::derivedSetup()
       var_names_massfrac[n] = "D_" + spec_names[n];
     }
     if (m_use_soret != 0) {
-      var_names_massfrac.resize(2 * NUM_SPECIES);
-      for (int n = 0; n < NUM_SPECIES; n++) {
-        var_names_massfrac[n + NUM_SPECIES] = "theta_" + spec_names[n];
+
+      // using KTDIF to rematch the names
+      int lightIdx[NUM_LITE_SPECIES];
+      egtransetKTDIF(lightIdx);
+
+      var_names_massfrac.resize(NUM_LITE_SPECIES + NUM_SPECIES);
+      for (int n = 0; n < NUM_LITE_SPECIES; n++) {
+        var_names_massfrac[n + NUM_SPECIES] =
+          "theta_" + spec_names[lightIdx[n]];
       }
       derive_lst.add(
-        "diffcoeff", IndexType::TheCellType(), 2 * NUM_SPECIES,
+        "diffcoeff", IndexType::TheCellType(), NUM_LITE_SPECIES + NUM_SPECIES,
         var_names_massfrac, pelelmex_derdiffc, the_same_box);
     } else {
       derive_lst.add(

@@ -1364,7 +1364,7 @@ pelelmex_derdiffc(
   AMREX_ASSERT(statefab.box().contains(bx));
   AMREX_ASSERT(derfab.nComp() >= dcomp + ncomp);
   if (a_pelelm->m_use_soret != 0) {
-    AMREX_ASSERT(ncomp == 2 * NUM_SPECIES);
+    AMREX_ASSERT(ncomp == NUM_LITE_SPECIES + NUM_SPECIES);
   }
   if (a_pelelm->m_use_soret == 0) {
     AMREX_ASSERT(ncomp == NUM_SPECIES);
@@ -1419,7 +1419,7 @@ pelelmex_derlambda(
   bool do_fixed_Le = (a_pelelm->m_fixed_Le != 0);
   bool do_fixed_Pr = (a_pelelm->m_fixed_Pr != 0);
   bool do_soret = (a_pelelm->m_use_soret != 0);
-  FArrayBox dummies(bx, 2 * NUM_SPECIES + 1, The_Async_Arena());
+  FArrayBox dummies(bx, NUM_SPECIES + NUM_LITE_SPECIES + 1, The_Async_Arena());
   auto const& rhoY = statefab.const_array(FIRSTSPEC);
   auto const& T = statefab.array(TEMP);
   auto rhoD = dummies.array(1);

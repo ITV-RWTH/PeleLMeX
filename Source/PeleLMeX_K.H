@@ -55,7 +55,11 @@ getTransportCoeff(
   amrex::Real lambda_cgs = 0.0_rt;
   amrex::Real mu_cgs = 0.0_rt;
   amrex::Real dummy_xi = 0.0_rt;
-  amrex::Real chi_loc[NUM_SPECIES] = {0.0};
+  #if NUM_LITE_SPECIES == 0
+  amrex::Real chi_loc[1] = {0.0};
+  #else
+  amrex::Real chi_loc[NUM_LITE_SPECIES] = {0.0};
+  #endif
   amrex::Real Tloc = T(i, j, k);
 
   constexpr bool get_xi = false; // always ignore bulk viscosity
@@ -66,12 +70,15 @@ getTransportCoeff(
   auto trans = pele::physics::PhysicsType::transport();
   trans.transport(
     get_xi, get_mu, get_lam, get_Ddiag, get_chi, Tloc, rho_cgs, y, rhoDi_cgs,
-    chi_loc, mu_cgs, dummy_xi, lambda_cgs, trans_parm);
+    chi_loc, mu_cgs, dummy_xi, lambda_cgs, trans_parm); // chi_loc is scaled
+  int liteIdx[NUM_LITE_SPECIES];
+  egtransetKTDIF(liteIdx);
 
   // Do CGS -> MKS conversions
   mu(i, j, k) = c2m::Mu(mu_cgs);
   if (do_fixed_Pr && do_fixed_Le) { // fixed Pr and Le, transport all dependent
-                                    // on visc
+
+    // on visc
     amrex::Real cpmix_cgs = 0.0_rt;
     eos.TY2Cp(T(i, j, k), y, cpmix_cgs);
     lambda(i, j, k) = PrInv * c2m::Cp(cpmix_cgs) * mu(i, j, k);
@@ -97,20 +104,12 @@ getTransportCoeff(
     lambda(i, j, k) = c2m::Lambda(lambda_cgs);
     for (int n = 0; n < NUM_SPECIES; n++) {
       rhoDi(i, j, k, n) = rhoDi_cgs[n] * Wbar * mwtinv[n] * 1.0e-1_rt;
-      if (do_soret) {
-        rhotheta(i, j, k, n) = -rhoDi_cgs[n] * chi_loc[n] * 1.0e-1_rt;
-      }
     }
+
     if (do_soret) {
-#if defined(H2_ID) && defined(H_ID)
-      // Soret coefficient scaling, see Howarth, Day, Pitsch & Aspden
-      rhotheta(i, j, k, H2_ID) *= 0.664;
-      rhotheta(i, j, k, H_ID) *= 0.58;
-#else
-      amrex::Abort(
-        "Running with Soret without light species, waste of time "
-        "and memory...");
-#endif
+      for (int n = 0; n < NUM_LITE_SPECIES; ++n) {
+        rhotheta(i, j, k, n) = -rhoDi_cgs[liteIdx[n]] * 1.0e-1_rt * chi_loc[n];
+      }
     }
   }
 }
@@ -982,6 +981,7 @@ buildDiffusionForcing(
   amrex::Array4<amrex::Real> const& forceT,
   amrex::Array4<const amrex::Real> const& dwbar,
   amrex::Array4<const amrex::Real> const& dT,
+  const int (&liteIdx)[NUM_LITE_SPECIES],
   amrex::Array4<const amrex::Real> const& extRhoY,
   amrex::Array4<const amrex::Real> const& extRhoH,
   int use_wbar,
@@ -1006,9 +1006,6 @@ buildDiffusionForcing(
     if (use_wbar != 0) {
       forceY(i, j, k, n) += dwbar(i, j, k, n);
     }
-    if (use_soret != 0) {
-      forceY(i, j, k, n) += dT(i, j, k, n);
-    }
   }
   forceT(i, j, k) = a(i, j, k, NUM_SPECIES) +
                     0.5_rt * (dn(i, j, k, NUM_SPECIES) + ddn(i, j, k) -
@@ -1017,6 +1014,12 @@ buildDiffusionForcing(
 
   if (closed_chamber == 1) {
     forceT(i, j, k) += dp0dt;
+  }
+
+  if (use_soret != 0) {
+    for (int n = 0; n < NUM_LITE_SPECIES; ++n) {
+      forceY(i, j, k, liteIdx[n]) += dT(i, j, k, n);
+    }
   }
 
   for (int n = 0; n < nAux; n++) {
@@ -1407,14 +1410,10 @@ getTurbViscSigma(
     // Singular values:
     amrex::Real sigma1 = std::sqrt(
       std::max(0.0, I[0] / 3.0 + 2.0 * std::sqrt(alpha1) * std::cos(alpha3)));
-    amrex::Real sigma2 = std::sqrt(
-      std::max(
-        0.0,
-        I[0] / 3.0 - 2.0 * std::sqrt(alpha1) * std::cos(Pi / 3.0 + alpha3)));
-    amrex::Real sigma3 = std::sqrt(
-      std::max(
-        0.0,
-        I[0] / 3.0 - 2.0 * std::sqrt(alpha1) * std::cos(Pi / 3.0 - alpha3)));
+    amrex::Real sigma2 = std::sqrt(std::max(
+      0.0, I[0] / 3.0 - 2.0 * std::sqrt(alpha1) * std::cos(Pi / 3.0 + alpha3)));
+    amrex::Real sigma3 = std::sqrt(std::max(
+      0.0, I[0] / 3.0 - 2.0 * std::sqrt(alpha1) * std::cos(Pi / 3.0 - alpha3)));
 
     // Sort
     sigma2 = std::max(sigma3, sigma2);
