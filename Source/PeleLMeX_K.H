@@ -55,7 +55,11 @@ getTransportCoeff(
   amrex::Real lambda_cgs = 0.0_rt;
   amrex::Real mu_cgs = 0.0_rt;
   amrex::Real dummy_xi = 0.0_rt;
+  #if NUM_LITE_SPECIES == 0
+  amrex::Real chi_loc[1] = {0.0};
+  #else
   amrex::Real chi_loc[NUM_LITE_SPECIES] = {0.0};
+  #endif
   amrex::Real Tloc = T(i, j, k);
 
   constexpr bool get_xi = false; // always ignore bulk viscosity

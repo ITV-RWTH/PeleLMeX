@@ -117,6 +117,7 @@ PeleLM::Setup()
           amrex::Abort(
             "Running with Soret without light species, waste of time "
             "and memory..."
+          );
 #endif
           amrex::Print()
             << "    Using mixture-averaged transport with Soret effects"
