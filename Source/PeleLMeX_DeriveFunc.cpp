@@ -1363,6 +1363,7 @@ pelelmex_derdiffc(
   }
   bool do_fixed_Le = (a_pelelm->m_fixed_Le != 0);
   bool do_fixed_Pr = (a_pelelm->m_fixed_Pr != 0);
+  bool do_fixed_Sc = (a_pelelm->m_fixed_Sc != 0);
   bool do_soret = (a_pelelm->m_use_soret != 0);
   amrex::FArrayBox dummies(bx, NUM_SPECIES + 2, amrex::The_Async_Arena());
   auto const& rhoY = statefab.const_array(FIRSTSPEC);
@@ -1376,9 +1377,10 @@ pelelmex_derdiffc(
                            : dummies.array(2); // dummy for no soret
   amrex::Real LeInv = a_pelelm->m_Lewis_inv;
   amrex::Real PrInv = a_pelelm->m_Prandtl_inv;
+  amrex::Real ScInv = a_pelelm->m_Scmidt_inv;
   amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
     getTransportCoeff<pele::physics::PhysicsType::eos_type>(
-      i, j, k, do_fixed_Le, do_fixed_Pr, do_soret, LeInv, PrInv, rhoY, T, rhoD,
+      i, j, k, do_fixed_Le, do_fixed_Pr, do_fixed_Sc, do_soret, LeInv, PrInv, Sc_Inv, rhoY, T, rhoD,
       rhotheta, lambda, mu, ltransparm, leosparm);
   });
 }
@@ -1407,6 +1409,7 @@ pelelmex_derlambda(
   AMREX_ASSERT(derfab.nComp() >= dcomp + ncomp);
   bool do_fixed_Le = (a_pelelm->m_fixed_Le != 0);
   bool do_fixed_Pr = (a_pelelm->m_fixed_Pr != 0);
+  bool do_fixed_Sc = (a_pelelm->m_fixed_Sc != 0);
   bool do_soret = (a_pelelm->m_use_soret != 0);
   amrex::FArrayBox dummies(bx, 2 * NUM_SPECIES + 1, amrex::The_Async_Arena());
   auto const& rhoY = statefab.const_array(FIRSTSPEC);
@@ -1419,9 +1422,10 @@ pelelmex_derlambda(
   auto const* leosparm = a_pelelm->eos_parms.device_parm();
   amrex::Real LeInv = a_pelelm->m_Lewis_inv;
   amrex::Real PrInv = a_pelelm->m_Prandtl_inv;
+  amrex::Real ScInv = a_pelelm->m_Schmidt_inv;
   amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
     getTransportCoeff<pele::physics::PhysicsType::eos_type>(
-      i, j, k, do_fixed_Le, do_fixed_Pr, do_soret, LeInv, PrInv, rhoY, T, rhoD,
+      i, j, k, do_fixed_Le, do_fixed_Pr, do_fixed_Sc, do_soret, LeInv, PrInv, Sc_Inv, rhoY, T, rhoD,
       rhotheta, lambda, mu, ltransparm, leosparm);
   });
 }

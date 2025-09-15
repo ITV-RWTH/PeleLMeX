@@ -1984,6 +1984,7 @@ public:
   int m_unity_Le = 0;
   int m_fixed_Pr = 0;
   int m_fixed_Le = 0;
+  int m_fixed_Sc = 0;
 
   amrex::Real m_Lewis_inv = 1.0;
   amrex::Real m_Prandtl_inv = 1.0 / 0.7;

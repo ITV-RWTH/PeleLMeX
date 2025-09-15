@@ -15,9 +15,11 @@ getTransportCoeff(
   int k,
   const bool do_fixed_Le,
   const bool do_fixed_Pr,
+  const bool do_fixed_Sc,
   const bool do_soret,
   amrex::Real LeInv,
   amrex::Real PrInv,
+  amrex::Real ScInv,
   amrex::Array4<const amrex::Real> const& rhoY,
   amrex::Array4<const amrex::Real> const& T,
   amrex::Array4<amrex::Real> const& rhoDi,
@@ -59,7 +61,7 @@ getTransportCoeff(
   constexpr bool get_xi = false; // always ignore bulk viscosity
   constexpr bool get_mu = true;  // always get dynamic viscosity
   bool get_lam = !do_fixed_Pr;
-  bool get_Ddiag = !do_fixed_Le;
+  bool get_Ddiag = !do_fixed_Lei && !do_fixed_Sc;
   bool get_chi = do_soret;
   auto trans = pele::physics::PhysicsType::transport();
   trans.transport(
@@ -68,12 +70,14 @@ getTransportCoeff(
 
   // Do CGS -> MKS conversions
   mu(i, j, k) = c2m::Mu(mu_cgs);
-  if (do_fixed_Pr && do_fixed_Le) { // fixed Pr and Le, transport all dependent
+  if (do_fixed_Pr && (do_fixed_Le || do_fixed_Sc)) { // fixed Pr and Le, transport all dependent
                                     // on visc
     amrex::Real cpmix_cgs = 0.0;
     eos.TY2Cp(T(i, j, k), y, cpmix_cgs);
     lambda(i, j, k) = PrInv * c2m::Cp(cpmix_cgs) * mu(i, j, k);
-    amrex::Real ScInv = PrInv * LeInv;
+    if (!do_fixed_Sc){
+      amrex::Real ScInv = PrInv * LeInv;
+    }
     for (int n = 0; n < NUM_SPECIES; n++) {
       rhoDi(i, j, k, n) = ScInv * mu(i, j, k);
     }
@@ -90,6 +94,13 @@ getTransportCoeff(
     eos.TY2Cp(T(i, j, k), y, cpmix_cgs);
     for (int n = 0; n < NUM_SPECIES; n++) {
       rhoDi(i, j, k, n) = lambda_cgs * 1.0e-1 * LeInv / cpmix_cgs;
+    }
+  } else if (do_fixed_Sc) { // fixed Sc, still use thermal cond
+    lambda(i, j, k) = c2m::Lambda(lambda_cgs);
+    amrex::Real cpmix_cgs = 0.0;
+    eos.TY2Cp(T(i, j, k), y, cpmix_cgs);
+    for (int n = 0; n < NUM_SPECIES; n++) {
+      rhoDi(i, j, k, n) = ScInv * mu(i, j, k);
     }
   } else { // full MA model, with Soret if needed
     lambda(i, j, k) = c2m::Lambda(lambda_cgs);
@@ -121,9 +132,11 @@ getTransportCoeff<pele::physics::eos::Manifold>(
   int k,
   const bool /*do_fixed_Le*/,
   const bool /*do_fixed_Pr*/,
+  const bool /*do_fixed_Sc*/,
   const bool do_soret,
   amrex::Real /*LeInv*/,
   amrex::Real /*PrInv*/,
+  amrex::Real /*ScInv*/,
   amrex::Array4<const amrex::Real> const& rhoY,
   amrex::Array4<const amrex::Real> const& T,
   amrex::Array4<amrex::Real> const& rhoDi,

@@ -130,6 +130,10 @@ PeleLM::Setup()
           amrex::Print() << "    Using fixed Pr = " << 1.0 / m_Prandtl_inv
                          << std::endl;
         }
+	if (m_fixed_Sc != 0) {
+          amrex::Print() << "    Using fixed Sc = " << 1.0 / m_Scmidt_inv
+                         << std::endl;
+        }
       }
     }
     if (m_do_react != 0) {
@@ -486,6 +490,13 @@ PeleLM::readParameters()
   pp.query("unity_Le", m_unity_Le);
   pp.query("fixed_Le", m_fixed_Le);
   pp.query("fixed_Pr", m_fixed_Pr);
+  pp.query("fixed_Sc", m_fixed_Sc);
+  if (m_fixed_Le != 0 && m_fixed_Pr != 0 && m_fixed_Sc != &&) {
+    amrex::Abort("Fixed Pr, Le, and Sc demanded. The problem is overdefined. Select only two.");
+  }
+  if (m_fixed_Le != 0 && m_fixed_Sc != &&) {
+    amrex::Abort("Combination of fixed Le and Sc not implemented!");
+  }
   if (m_unity_Le != 0) {
     m_fixed_Le = 1;
     amrex::Print() << "WARNING: unity_Le is deprecated and will be removed in "
@@ -495,6 +506,11 @@ PeleLM::readParameters()
   if (m_do_les) { // For LES, Prandtl and Schmidt numbers are fixed
     m_fixed_Le = 1;
     m_fixed_Pr = 1;
+    amrex::Real Schmidt = 0.7;
+    pp.query("Schmidt", Schmidt);
+    m_Schmidt_inv = 1.0 / Schmidt;
+  }
+  if (m_fixed_Sc != 0 && !m_do_les) {
     amrex::Real Schmidt = 0.7;
     pp.query("Schmidt", Schmidt);
     m_Schmidt_inv = 1.0 / Schmidt;
