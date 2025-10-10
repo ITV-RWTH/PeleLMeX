@@ -1167,6 +1167,9 @@ public:
   void fillTurbInflow(
     amrex::MultiFab& a_vel, int vel_comp, int lev, const amrex::Real a_time);
 
+  void fillStateInflow(
+    amrex::MultiFab& a_state, int start_comp, int lev, const amrex::Real a_time, int ncomp);
+
   // Average down operations
   void averageDownState(const PeleLM::TimeStamp& a_time);
   void averageDownScalars(const PeleLM::TimeStamp& a_time);
