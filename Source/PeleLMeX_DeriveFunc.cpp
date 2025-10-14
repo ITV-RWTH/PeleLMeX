@@ -1362,6 +1362,7 @@ pelelmex_derdiffc(
     AMREX_ASSERT(ncomp == NUM_SPECIES);
   }
   bool do_fixed_Le = (a_pelelm->m_fixed_Le != 0);
+  bool do_fixed_Le_i = (a_pelelm->m_fixed_Le_i != 0);
   bool do_fixed_Pr = (a_pelelm->m_fixed_Pr != 0);
   bool do_soret = (a_pelelm->m_use_soret != 0);
   amrex::FArrayBox dummies(bx, NUM_SPECIES + 2, amrex::The_Async_Arena());
@@ -1375,12 +1376,13 @@ pelelmex_derdiffc(
   auto rhotheta = do_soret ? derfab.array(dcomp + NUM_SPECIES)
                            : dummies.array(2); // dummy for no soret
   amrex::Real LeInv = a_pelelm->m_Lewis_inv;
+  amrex::Array<amrex::Real, NUM_SPECIES> Le_i_Inv = a_pelelm->m_Lewis_i_inv;
   amrex::Real PrInv = a_pelelm->m_Prandtl_inv;
   amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-    getTransportCoeff<pele::physics::PhysicsType::eos_type>(
-      i, j, k, do_fixed_Le, do_fixed_Pr, do_soret, LeInv, PrInv, rhoY, T, rhoD,
-      rhotheta, lambda, mu, ltransparm, leosparm);
-  });
+     getTransportCoeff<pele::physics::PhysicsType::eos_type>(
+        i, j, k, do_fixed_Le, do_fixed_Le_i, do_fixed_Pr, do_soret, LeInv, Le_i_Inv, PrInv, rhoY, T,
+        rhoD, rhotheta, lambda, mu, ltransparm);
+    });
 }
 
 //
@@ -1406,6 +1408,7 @@ pelelmex_derlambda(
   AMREX_ASSERT(statefab.box().contains(bx));
   AMREX_ASSERT(derfab.nComp() >= dcomp + ncomp);
   bool do_fixed_Le = (a_pelelm->m_fixed_Le != 0);
+  bool do_fixed_Le_i = (a_pelelm->m_fixed_Le_i != 0);
   bool do_fixed_Pr = (a_pelelm->m_fixed_Pr != 0);
   bool do_soret = (a_pelelm->m_use_soret != 0);
   amrex::FArrayBox dummies(bx, 2 * NUM_SPECIES + 1, amrex::The_Async_Arena());
@@ -1418,12 +1421,15 @@ pelelmex_derlambda(
   auto const* ltransparm = a_pelelm->trans_parms.device_parm();
   auto const* leosparm = a_pelelm->eos_parms.device_parm();
   amrex::Real LeInv = a_pelelm->m_Lewis_inv;
+  amrex::Array<amrex::Real, NUM_SPECIES> Le_i_Inv = a_pelelm->m_Lewis_i_inv;
   amrex::Real PrInv = a_pelelm->m_Prandtl_inv;
-  amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-    getTransportCoeff<pele::physics::PhysicsType::eos_type>(
-      i, j, k, do_fixed_Le, do_fixed_Pr, do_soret, LeInv, PrInv, rhoY, T, rhoD,
-      rhotheta, lambda, mu, ltransparm, leosparm);
-  });
+  amrex::ParallelFor(
+    bx,
+    [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+      getTransportCoeff<pele::physics::PhysicsType::eos_type>(
+        i, j, k, do_fixed_Le, do_fixed_Le_i, do_fixed_Pr, do_soret, LeInv, Le_i_Inv, PrInv, rhoY, T,
+        rhoD, rhotheta, lambda, mu, ltransparm);
+    });
 }
 
 //
