@@ -2,11 +2,9 @@
 #include <PeleLMeX_K.H>
 #include <pelelmex_prob.H>
 #include <PeleLMeX_DiffusionOp.H>
-#ifdef PELE_USE_EFIELD
+#ifdef PELE_USE_PLASMA
 #include <PeleLMeX_EF_K.H>
 #endif
-
-using namespace amrex;
 
 void
 PeleLM::calcTurbViscosity(const TimeStamp& a_time)
@@ -33,8 +31,8 @@ PeleLM::calcTurbViscosity(const TimeStamp& a_time)
     constexpr int ncomp = AMREX_SPACEDIM * AMREX_SPACEDIM;
     for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
       GradVel[lev][idim].define(
-        amrex::convert(ba, IntVect::TheDimensionVector(idim)), dm, ncomp, 0,
-        MFInfo(), factory);
+        amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)), dm, ncomp,
+        0, amrex::MFInfo(), factory);
     }
   }
 
@@ -57,26 +55,28 @@ PeleLM::calcTurbViscosity(const TimeStamp& a_time)
       // just set density as a constant; don't need to worry about cp
       for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
         dens_fc[idim].define(
-          amrex::convert(ba, IntVect::TheDimensionVector(idim)), dm, 1, 0,
-          MFInfo(), factory);
+          amrex::convert(ba, amrex::IntVect::TheDimensionVector(idim)), dm, 1,
+          0, amrex::MFInfo(), factory);
         dens_fc[idim].setVal(m_rho);
       }
     } else {
       // get cp_cc (valid in 1 grow cell for interpolation to FCs)
       int ngrow = 1;
-      cp_cc.define(ba, dm, 1, ngrow, MFInfo(), factory);
+      auto const* leosparm = eos_parms.device_parm();
+      cp_cc.define(ba, dm, 1, ngrow, amrex::MFInfo(), factory);
       auto const& state_arr = ldata_p->state.const_arrays();
       auto const& cp_arr = cp_cc.arrays();
       amrex::ParallelFor(
         cp_cc, cp_cc.nGrowVect(),
         [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
           getCpmixGivenRYT(
-            i, j, k, Array4<Real const>(state_arr[box_no], DENSITY),
-            Array4<Real const>(state_arr[box_no], FIRSTSPEC),
-            Array4<Real const>(state_arr[box_no], TEMP),
-            Array4<Real>(cp_arr[box_no]));
+            i, j, k,
+            amrex::Array4<amrex::Real const>(state_arr[box_no], DENSITY),
+            amrex::Array4<amrex::Real const>(state_arr[box_no], FIRSTSPEC),
+            amrex::Array4<amrex::Real const>(state_arr[box_no], TEMP),
+            amrex::Array4<amrex::Real>(cp_arr[box_no]), leosparm);
         });
-      Gpu::streamSynchronize();
+      amrex::Gpu::streamSynchronize();
 
       // this function really just interpolates CCs to FCs in this case
       int doZeroVisc = 0;
@@ -107,9 +107,10 @@ PeleLM::calcTurbViscosity(const TimeStamp& a_time)
           ldata_p->visc_turb_fc[idim], ldata_p->visc_turb_fc[idim].nGrowVect(),
           [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
             getTurbViscSmagorinsky(
-              i, j, k, prefact, Array4<Real const>(velgrad_arr[box_no]),
-              Array4<Real const>(dens_arr[box_no]),
-              Array4<Real>(mut_arr[box_no]));
+              i, j, k, prefact,
+              amrex::Array4<amrex::Real const>(velgrad_arr[box_no]),
+              amrex::Array4<amrex::Real const>(dens_arr[box_no]),
+              amrex::Array4<amrex::Real>(mut_arr[box_no]));
 #ifdef AMREX_USE_EB
             if (idim == 0) {
               const amrex::Real vfr_m =
@@ -151,9 +152,10 @@ PeleLM::calcTurbViscosity(const TimeStamp& a_time)
           ldata_p->visc_turb_fc[idim], ldata_p->visc_turb_fc[idim].nGrowVect(),
           [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
             getTurbViscWALE(
-              i, j, k, prefact, Array4<Real const>(velgrad_arr[box_no]),
-              Array4<Real const>(dens_arr[box_no]),
-              Array4<Real>(mut_arr[box_no]));
+              i, j, k, prefact,
+              amrex::Array4<amrex::Real const>(velgrad_arr[box_no]),
+              amrex::Array4<amrex::Real const>(dens_arr[box_no]),
+              amrex::Array4<amrex::Real>(mut_arr[box_no]));
 #ifdef AMREX_USE_EB
             if (idim == 0) {
               const amrex::Real vfr_m =
@@ -195,9 +197,10 @@ PeleLM::calcTurbViscosity(const TimeStamp& a_time)
           ldata_p->visc_turb_fc[idim], ldata_p->visc_turb_fc[idim].nGrowVect(),
           [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
             getTurbViscSigma(
-              i, j, k, prefact, Array4<Real const>(velgrad_arr[box_no]),
-              Array4<Real const>(dens_arr[box_no]),
-              Array4<Real>(mut_arr[box_no]));
+              i, j, k, prefact,
+              amrex::Array4<amrex::Real const>(velgrad_arr[box_no]),
+              amrex::Array4<amrex::Real const>(dens_arr[box_no]),
+              amrex::Array4<amrex::Real>(mut_arr[box_no]));
 #ifdef AMREX_USE_EB
             if (idim == 0) {
               const amrex::Real vfr_m =
@@ -233,7 +236,7 @@ PeleLM::calcTurbViscosity(const TimeStamp& a_time)
 #endif
           });
       }
-      Gpu::streamSynchronize();
+      amrex::Gpu::streamSynchronize();
 
       // Compute lambda_turb = alpha_t * cp = mu_t / Pr_t * cp
       if (m_incompressible == 0) {
@@ -262,7 +265,7 @@ PeleLM::calcViscosity(const TimeStamp& a_time)
     } else {
 
       // Transport data pointer
-      auto const* ltransparm = trans_parms.device_trans_parm();
+      auto const* ltransparm = trans_parms.device_parm();
 
       // MultiArrays
       auto const& sma = ldata_p->state.const_arrays();
@@ -272,13 +275,13 @@ PeleLM::calcViscosity(const TimeStamp& a_time)
         ldata_p->visc_cc, ldata_p->visc_cc.nGrowVect(),
         [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
           getVelViscosity(
-            i, j, k, Array4<Real const>(sma[box_no], FIRSTSPEC),
-            Array4<Real>(sma[box_no], TEMP), Array4<Real>(vma[box_no], 0),
-            ltransparm);
+            i, j, k, amrex::Array4<amrex::Real const>(sma[box_no], FIRSTSPEC),
+            amrex::Array4<amrex::Real>(sma[box_no], TEMP),
+            amrex::Array4<amrex::Real>(vma[box_no], 0), ltransparm);
         });
     }
   }
-  Gpu::streamSynchronize();
+  amrex::Gpu::streamSynchronize();
 }
 
 void
@@ -286,64 +289,108 @@ PeleLM::calcDiffusivity(const TimeStamp& a_time)
 {
   BL_PROFILE("PeleLMeX::calcDiffusivity()");
 
+  const amrex::Real Pr_inv = m_Prandtl_inv;
+  const amrex::Real Le_inv = m_Lewis_inv;
+  const amrex::Array<amrex::Real, NUM_SPECIES> Le_i_inv = m_Lewis_i_inv;
+  const bool do_fixed_Le = (m_fixed_Le != 0);
+  const bool do_fixed_Le_i = (m_fixed_Le_i != 0);
+  const bool do_fixed_Pr = (m_fixed_Pr != 0);
+  const bool do_soret = (m_use_soret != 0);
+  // pass soret array, or pass mu as dummy (won't do anything)
+  const int soret_idx = do_soret ? 1 : 0;
+
+  // Transport data pointer
+  auto const* ltransparm = trans_parms.device_parm();
+  auto const* leosparm = eos_parms.device_parm();
+#ifdef PELE_USE_PLASMA
+  amrex::GpuArray<amrex::Real, NUM_SPECIES> mwt{0.0};
+  {
+    auto eos = pele::physics::PhysicsType::eos(leosparm);
+    eos.molecular_weight(mwt.arr);
+  }
+#endif
+
   for (int lev = 0; lev <= finest_level; ++lev) {
 
     auto* ldata_p = getLevelDataPtr(lev, a_time);
 
-    // Transport data pointer
-    auto const* ltransparm = trans_parms.device_trans_parm();
-
     // MultiArrays
     auto const& sma = ldata_p->state.const_arrays();
     auto const& dma = ldata_p->diff_cc.arrays();
-#ifdef PELE_USE_EFIELD
+#ifdef PELE_USE_PLASMA
     auto const& kma = ldata_p->mob_cc.arrays();
-    GpuArray<Real, NUM_SPECIES> mwt{0.0};
-    {
-      auto eos = pele::physics::PhysicsType::eos();
-      eos.molecular_weight(mwt.arr);
-    }
 #endif
 
-    const amrex::Real Pr_inv = m_Prandtl_inv;
-    const amrex::Real Le_inv = m_Lewis_inv;
-    const amrex::Array<amrex::Real, NUM_SPECIES> Le_i_inv = m_Lewis_i_inv;
-    const bool do_fixed_Le = (m_fixed_Le != 0);
-    const bool do_fixed_Le_i = (m_fixed_Le_i != 0);
-    const bool do_fixed_Pr = (m_fixed_Pr != 0);
-    const bool do_soret = (m_use_soret != 0);
-    const int soret_idx =
-      do_soret ? 1
-               : 0; // pass soret array, or pass mu as dummy (won't do anything)
     amrex::ParallelFor(
       ldata_p->diff_cc, ldata_p->diff_cc.nGrowVect(),
       [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
-        getTransportCoeff(
+        getTransportCoeff<pele::physics::PhysicsType::eos_type>(
           i, j, k, do_fixed_Le, do_fixed_Le_i, do_fixed_Pr, do_soret, Le_inv, Le_i_inv, Pr_inv,
-          Array4<Real const>(sma[box_no], FIRSTSPEC),
-          Array4<Real const>(sma[box_no], TEMP), Array4<Real>(dma[box_no], 0),
-          Array4<Real>(dma[box_no], NUM_SPECIES + 1 + soret_idx),
-          Array4<Real>(dma[box_no], NUM_SPECIES),
-          Array4<Real>(dma[box_no], NUM_SPECIES + 1), ltransparm);
-#ifdef PELE_USE_EFIELD
+          amrex::Array4<amrex::Real const>(sma[box_no], FIRSTSPEC),
+          amrex::Array4<amrex::Real const>(sma[box_no], TEMP),
+          amrex::Array4<amrex::Real>(dma[box_no], 0),
+          amrex::Array4<amrex::Real>(dma[box_no], NUM_SPECIES + 1 + soret_idx),
+          amrex::Array4<amrex::Real>(dma[box_no], NUM_SPECIES),
+          amrex::Array4<amrex::Real>(dma[box_no], NUM_SPECIES + 1), ltransparm,
+          leosparm);
+#ifdef PELE_USE_PLASMA
         getKappaSp(
-          i, j, k, mwt.arr, zk, Array4<Real const>(sma[box_no], FIRSTSPEC),
-          Array4<Real>(dma[box_no], 0), Array4<Real const>(sma[box_no], TEMP),
-          Array4<Real>(kma[box_no], 0));
+          i, j, k, mwt.arr, zk,
+          amrex::Array4<amrex::Real const>(sma[box_no], FIRSTSPEC),
+          amrex::Array4<amrex::Real>(dma[box_no], 0),
+          amrex::Array4<amrex::Real const>(sma[box_no], TEMP),
+          amrex::Array4<amrex::Real>(kma[box_no], 0));
 #endif
       });
+
+    // Fill the diff_aux MF with specified Schmidt number
+    for (int n = 0; n < m_nAux; n++) {
+      if (m_aux_Schmidt[n] > 0) {
+        amrex::MultiFab::Copy(
+          ldata_p->diff_aux_cc, ldata_p->diff_cc, NUM_SPECIES + 1, n, 1,
+          ldata_p->diff_cc.nGrowVect());
+        ldata_p->diff_aux_cc.mult(
+          1.0 / m_aux_Schmidt[n], n, 1, ldata_p->diff_cc.nGrow());
+      } else {
+        amrex::MultiFab::Copy(
+          ldata_p->diff_aux_cc, ldata_p->diff_cc, NUM_SPECIES, n, 1,
+          ldata_p->diff_cc.nGrowVect()); // lambda
+
+        const auto& ba = ldata_p->diff_cc.boxArray();
+        const auto& dm = ldata_p->diff_cc.DistributionMap();
+        const auto& factory = ldata_p->diff_cc.Factory();
+
+        amrex::MultiFab cp_cc;
+        int ngrow = ldata_p->diff_cc.nGrow();
+        cp_cc.define(ba, dm, 1, ngrow, amrex::MFInfo(), factory);
+        auto const& state_arr = ldata_p->state.const_arrays();
+        auto const& cp_arr = cp_cc.arrays();
+        amrex::ParallelFor(
+          cp_cc, cp_cc.nGrowVect(),
+          [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
+            getCpmixGivenRYT(
+              i, j, k,
+              amrex::Array4<amrex::Real const>(state_arr[box_no], DENSITY),
+              amrex::Array4<amrex::Real const>(state_arr[box_no], FIRSTSPEC),
+              amrex::Array4<amrex::Real const>(state_arr[box_no], TEMP),
+              amrex::Array4<amrex::Real>(cp_arr[box_no]), leosparm);
+          });
+
+        ldata_p->diff_aux_cc.divide(cp_cc, n, 1, ldata_p->diff_cc.nGrow());
+      }
+    }
   }
-  Gpu::streamSynchronize();
+  amrex::Gpu::streamSynchronize();
 }
 
-Array<MultiFab, AMREX_SPACEDIM>
+amrex::Array<amrex::MultiFab, AMREX_SPACEDIM>
 PeleLM::getDiffusivity(
   int lev,
   int beta_comp,
   int ncomp,
   int doZeroVisc,
-  Vector<BCRec> bcrec,
-  MultiFab const& beta_cc,
+  amrex::Vector<amrex::BCRec> bcrec,
+  amrex::MultiFab const& beta_cc,
   int addTurbContrib)
 {
   BL_PROFILE("PeleLMeX::getDiffusivity()");
@@ -354,18 +401,18 @@ PeleLM::getDiffusivity(
   const auto& ba = beta_cc.boxArray();
   const auto& dm = beta_cc.DistributionMap();
   const auto& factory = beta_cc.Factory();
-  Array<MultiFab, AMREX_SPACEDIM> beta_ec{AMREX_D_DECL(
-    MultiFab(
-      amrex::convert(ba, IntVect::TheDimensionVector(0)), dm, ncomp, 0,
-      MFInfo(), factory),
-    MultiFab(
-      amrex::convert(ba, IntVect::TheDimensionVector(1)), dm, ncomp, 0,
-      MFInfo(), factory),
-    MultiFab(
-      amrex::convert(ba, IntVect::TheDimensionVector(2)), dm, ncomp, 0,
-      MFInfo(), factory))};
+  amrex::Array<amrex::MultiFab, AMREX_SPACEDIM> beta_ec{AMREX_D_DECL(
+    amrex::MultiFab(
+      amrex::convert(ba, amrex::IntVect::TheDimensionVector(0)), dm, ncomp, 0,
+      amrex::MFInfo(), factory),
+    amrex::MultiFab(
+      amrex::convert(ba, amrex::IntVect::TheDimensionVector(1)), dm, ncomp, 0,
+      amrex::MFInfo(), factory),
+    amrex::MultiFab(
+      amrex::convert(ba, amrex::IntVect::TheDimensionVector(2)), dm, ncomp, 0,
+      amrex::MFInfo(), factory))};
 
-  const Box& domain = geom[lev].Domain();
+  const amrex::Box& domain = geom[lev].Domain();
 
 #ifdef AMREX_USE_EB
   // EB : use EB CCentroid -> FCentroid
@@ -377,19 +424,19 @@ PeleLM::getDiffusivity(
   bool use_harmonic_avg = m_harm_avg_cen2edge != 0;
 
 #ifdef AMREX_USE_OMP
-#pragma omp parallel if (Gpu::notInLaunchRegion())
+#pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
 #endif
-  for (MFIter mfi(beta_cc, TilingIfNotGPU()); mfi.isValid(); ++mfi) {
+  for (amrex::MFIter mfi(beta_cc, amrex::TilingIfNotGPU()); mfi.isValid();
+       ++mfi) {
     for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
-      const Box ebx = mfi.nodaltilebox(idim);
-      const Box& edomain = amrex::surroundingNodes(domain, idim);
+      const amrex::Box ebx = mfi.nodaltilebox(idim);
+      const amrex::Box& edomain = amrex::surroundingNodes(domain, idim);
       const auto& diff_c = beta_cc.const_array(mfi, beta_comp);
       const auto& diff_ec = beta_ec[idim].array(mfi);
       const auto bc_lo = bcrec[0].lo(idim);
       const auto bc_hi = bcrec[0].hi(idim);
       amrex::ParallelFor(
-        ebx, [idim, ncomp, bc_lo, bc_hi, use_harmonic_avg, diff_c, diff_ec,
-              edomain] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+        ebx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
           int idx[3] = {i, j, k};
           bool on_lo =
             ((bc_lo == amrex::BCType::ext_dir) &&
@@ -410,24 +457,18 @@ PeleLM::getDiffusivity(
   // to the component ncomp = NUM_SPECIES, beta_comp = 0           --> SPECIES
   // DIFFUSIVITY ncomp = 1          , beta_comp = NUM_SPECIES --> THERMAL
   // CONDUCTIVITY ncomp = 1          , beta_comp = 0           --> VISCOSITY If
-  // PELE_USE_EFIELD is active, these relationships will not hold and LES is not
+  // PELE_USE_PLASMA is active, these relationships will not hold and LES is not
   // supported
   if ((addTurbContrib != 0) and m_do_les) {
 
-    // If initializing the simulation, always recompute turbulent viscosity
-    // otherwise, only recompute once per level per timestep (at old time)
-    // calcTurbViscosity computes for all levels, so only call from the base
-    // level
+    // Turbulent viscosity - always in old data except during initialization
+    // (not updated because velocity doesn't get updated until end of advance)
     TimeStamp tstamp;
     if (getTime(lev, AmrNewTime) == 0.0) {
       tstamp = AmrNewTime;
       if (lev == 0) {
         calcTurbViscosity(tstamp);
       }
-    } else if (lev == 0 and getTime(lev, AmrOldTime) > m_turb_visc_time[lev]) {
-      tstamp = AmrOldTime;
-      calcTurbViscosity(tstamp);
-      m_turb_visc_time[lev] = getTime(lev, AmrOldTime);
     } else {
       tstamp = AmrOldTime;
     }
@@ -450,27 +491,31 @@ PeleLM::getDiffusivity(
         amrex::MultiFab::Add(
           beta_ec[idim], ldata_p->lambda_turb_fc[idim], 0, 0, 1, 0);
       } else { // Invalid
-        amrex::Abort("getDiffusivity(): LES model is on but cannot provide a "
-                     "turbulent transport coefficient");
+        amrex::Abort(
+          "getDiffusivity(): LES model is on but cannot provide a "
+          "turbulent transport coefficient");
       }
     }
   }
 
   // Enable zeroing diffusivity on faces to produce walls
   if (doZeroVisc != 0) {
+    ProbParm const* lprobparm = prob_parm_d;
     const auto geomdata = geom[lev].data();
     for (int idim = 0; idim < AMREX_SPACEDIM; idim++) {
-      const Box& edomain = amrex::surroundingNodes(domain, idim);
+      const amrex::Box& edomain = amrex::surroundingNodes(domain, idim);
 #ifdef AMREX_USE_OMP
-#pragma omp parallel if (Gpu::notInLaunchRegion())
+#pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
 #endif
-      for (MFIter mfi(beta_ec[idim], TilingIfNotGPU()); mfi.isValid(); ++mfi) {
-        const Box ebx = mfi.tilebox();
+      for (amrex::MFIter mfi(beta_ec[idim], amrex::TilingIfNotGPU());
+           mfi.isValid(); ++mfi) {
+        const amrex::Box ebx = mfi.tilebox();
         const auto& diff_ec = beta_ec[idim].array(mfi);
         amrex::ParallelFor(
           ebx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-            zero_visc(
-              i, j, k, diff_ec, geomdata, edomain, idim, beta_comp, ncomp);
+            ProblemSpecificFunctions::zero_visc(
+              i, j, k, diff_ec, geomdata, edomain, idim, beta_comp, ncomp,
+              *lprobparm);
           });
       }
     }

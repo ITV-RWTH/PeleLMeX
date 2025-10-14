@@ -14,7 +14,7 @@ PeleLM::readProbParm() // NOLINT(readability-make-member-function-const)
   pp.query("forcevort", PeleLM::prob_parm->forcevort);
 
   if (m_incompressible == 0) {
-    auto& trans_parm = PeleLM::trans_parms.host_trans_parm();
+    auto& trans_parm = PeleLM::trans_parms.host_parm();
     amrex::ParmParse pptr("transport");
     pp.query("const_viscosity", trans_parm.const_viscosity);
     pp.query("const_bulk_viscosity", trans_parm.const_bulk_viscosity);
@@ -22,4 +22,9 @@ PeleLM::readProbParm() // NOLINT(readability-make-member-function-const)
     pp.query("const_diffusivity", trans_parm.const_diffusivity);
     PeleLM::trans_parms.sync_to_device();
   }
+}
+
+void
+PeleLM::freeProbParm()
+{
 }

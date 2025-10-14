@@ -24,8 +24,13 @@ function(build_pele_physics_lib pele_physics_lib_name)
       PRIVATE
         ${PELE_PHYSICS_UTILITY_DIR}/TurbInflow/turbinflow.cpp
         ${PELE_PHYSICS_UTILITY_DIR}/TurbInflow/turbinflow.H
+        ${PELE_PHYSICS_UTILITY_DIR}/TurbForcing/TurbForcing.cpp
+        ${PELE_PHYSICS_UTILITY_DIR}/TurbForcing/TurbForcing.H
+        ${PELE_PHYSICS_UTILITY_DIR}/TurbForcing/MersenneTwister.cpp
+        ${PELE_PHYSICS_UTILITY_DIR}/TurbForcing/MersenneTwister.H
     )
     target_include_directories(${pele_physics_lib_name} PUBLIC ${PELE_PHYSICS_UTILITY_DIR}/TurbInflow)
+    target_include_directories(${pele_physics_lib_name} PUBLIC ${PELE_PHYSICS_UTILITY_DIR}/TurbForcing)
 
     target_sources(${pele_physics_lib_name}
       PRIVATE
@@ -52,11 +57,29 @@ function(build_pele_physics_lib pele_physics_lib_name)
 
     target_sources(${pele_physics_lib_name}
       PRIVATE
+      ${PELE_PHYSICS_UTILITY_DIR}/BlackBoxFunction/BlackBoxFunction.cpp
+      ${PELE_PHYSICS_UTILITY_DIR}/BlackBoxFunction/BlackBoxFunction.H
+      ${PELE_PHYSICS_UTILITY_DIR}/BlackBoxFunction/BlackBoxFunctionFactory.H
+      ${PELE_PHYSICS_UTILITY_DIR}/BlackBoxFunction/NeuralNetHomerolled.H
+      ${PELE_PHYSICS_UTILITY_DIR}/BlackBoxFunction/NeuralNetLayerDef.H
+      ${PELE_PHYSICS_UTILITY_DIR}/BlackBoxFunction/NeuralNetModelDef.H
+      ${PELE_PHYSICS_UTILITY_DIR}/BlackBoxFunction/Table.H)
+    target_include_directories(${pele_physics_lib_name} PUBLIC ${PELE_PHYSICS_UTILITY_DIR}/BlackBoxFunction)
+
+    target_sources(${pele_physics_lib_name}
+      PRIVATE
         ${PELE_PHYSICS_UTILITY_DIR}/PMF/PMF.H
         ${PELE_PHYSICS_UTILITY_DIR}/PMF/PMFData.cpp
         ${PELE_PHYSICS_UTILITY_DIR}/PMF/PMFData.H
     )
     target_include_directories(${pele_physics_lib_name} PUBLIC ${PELE_PHYSICS_UTILITY_DIR}/PMF)
+
+    target_sources(${pele_physics_lib_name}
+      PRIVATE
+        ${PELE_PHYSICS_UTILITY_DIR}/Utilities/Utilities.H
+        ${PELE_PHYSICS_UTILITY_DIR}/Utilities/UnitConversions.H
+    )
+    target_include_directories(${pele_physics_lib_name} PUBLIC ${PELE_PHYSICS_UTILITY_DIR}/Utilities)
 
     target_sources(${pele_physics_lib_name}
       PRIVATE
@@ -95,7 +118,6 @@ function(build_pele_physics_lib pele_physics_lib_name)
 
     target_sources(${pele_physics_lib_name}
       PRIVATE
-        ${PELE_PHYSICS_EOS_DIR}/EOS.cpp
         ${PELE_PHYSICS_EOS_DIR}/EOS.H
         ${PELE_PHYSICS_EOS_DIR}/GammaLaw.H
         ${PELE_PHYSICS_EOS_DIR}/Fuego.H

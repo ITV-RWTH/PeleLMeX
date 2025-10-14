@@ -6,6 +6,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/CMake")
 include(CMakePackageConfigHelpers)
 include(PeleUtils)
+enable_testing()
+include(CTest)
 
 set(PELE_DIM "3" CACHE STRING "Number of physical dimensions")
 option(PELE_ENABLE_CLANG_TIDY "Enable clang-tidy analysis" OFF)
@@ -37,6 +39,10 @@ option(PELE_ENABLE_SYCL "Enable SyCL" OFF)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+if(PELE_ENABLE_FCOMPARE_FOR_TESTS OR PELE_ENABLE_PARTICLES)
+  set(PELE_ENABLE_FCOMPARE ON)
+endif()
 
 if(PELE_ENABLE_CUDA)
   enable_language(CUDA)
@@ -98,8 +104,5 @@ init_code_checks()
 include(SetRpath)
 
 add_subdirectory(Exec)
-
-enable_testing()
-include(CTest)
 add_subdirectory(Tests)
 add_subdirectory(${CMAKE_SOURCE_DIR}/Submodules/PelePhysics/Testing/Exec/Radiation)

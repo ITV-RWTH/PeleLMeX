@@ -14,11 +14,16 @@ PeleLM::readProbParm() // NOLINT(readability-make-member-function-const)
   pp.query("use_symmetry", prob_parm->is_sym);
   pp.query("use_mix_bubble", prob_parm->bubble_is_mix);
 
-  auto& trans_parm = PeleLM::trans_parms.host_trans_parm();
+  auto& trans_parm = PeleLM::trans_parms.host_parm();
   amrex::ParmParse pptr("transport");
   pp.query("const_viscosity", trans_parm.const_viscosity);
   pp.query("const_bulk_viscosity", trans_parm.const_bulk_viscosity);
   pp.query("const_conductivity", trans_parm.const_conductivity);
   pp.query("const_diffusivity", trans_parm.const_diffusivity);
   PeleLM::trans_parms.sync_to_device();
+}
+
+void
+PeleLM::freeProbParm()
+{
 }
