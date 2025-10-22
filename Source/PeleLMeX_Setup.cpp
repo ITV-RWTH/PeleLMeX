@@ -1215,6 +1215,11 @@ PeleLM::derivedSetup()
       "HeatRelease", amrex::IndexType::TheCellType(), 1,
       pelelmex_derheatrelease, the_same_box);
 
+    // Heat capacity
+    derive_lst.add(
+      "Cpmix", amrex::IndexType::TheCellType(), 1,
+      pelelmex_dercpmix, the_same_box);
+
     // Thermal diffusivity
     derive_lst.add(
       "lambda", amrex::IndexType::TheCellType(), 1, pelelmex_derlambda,

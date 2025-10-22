@@ -83,6 +83,39 @@ pelelmex_derheatrelease(
     }
   });
 }
+//
+// Compute Cpmix
+//
+void 
+pelelmex_dercpmix(
+  PeleLM* a_pelelm,
+  const amrex::Box& bx,
+  amrex::FArrayBox& derfab,
+  int dcomp,
+  int ncomp,
+  const amrex::FArrayBox& statefab,
+  const amrex::FArrayBox& /*reactfab*/,
+  const amrex::FArrayBox& /*pressfab*/,
+  const amrex::Geometry& /*geom*/,
+  amrex::Real /*time*/,
+  const amrex::Vector<amrex::BCRec>& /*bcrec*/,
+  int /*level*/)
+{
+  amrex::ignore_unused(ncomp);
+  AMREX_ASSERT(derfab.box().contains(bx));
+  AMREX_ASSERT(statefab.box().contains(bx));
+
+  auto const density = statefab.array(DENSITY);
+  auto const rhoY = statefab.array(FIRSTSPEC);
+  auto const temp = statefab.array(TEMP);
+  auto cp = derfab.array(dcomp);
+
+  auto const* leosparm = a_pelelm->eos_parms.device_parm();
+  
+  amrex::ParallelFor(bx,[=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+    getCpmixGivenRYT(i, j, k, density, rhoY, temp, cp, leosparm);
+  });
+}
 
 //
 // Extract species mass fractions Y_n
@@ -1190,6 +1223,7 @@ pelelmex_derenstrophy(
     });
   }
 }
+
 
 //
 // Compute mixture fraction
