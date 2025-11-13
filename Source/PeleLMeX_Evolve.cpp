@@ -77,7 +77,11 @@ PeleLM::Evolve()
 
     // Check for plot file
     if (writePlotNow() || dump_and_stop || plt_and_continue) {
-      WritePlotFile();
+      if (m_do_mid_plt == 1) {
+        WritePlotFileMidTime();
+      } else {
+        WritePlotFile();
+      }
       plt_justDidIt = 1;
     }
 

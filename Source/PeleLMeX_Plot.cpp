@@ -511,6 +511,460 @@ PeleLM::WritePlotFile()
 }
 
 void
+PeleLM::WritePlotFileMidTime()
+{
+  BL_PROFILE("PeleLMeX::WritePlotFile()");
+
+  const std::string& plotfilename =
+    amrex::Concatenate(m_plot_file, m_nstep, m_ioDigits);
+
+  if (m_verbose != 0) {
+    amrex::Print() << "\n Writing plotfile: " << plotfilename << "\n";
+  }
+
+  //----------------------------------------------------------------
+  // Delete plotfiles if present and requested (and have same name)
+  if (m_plot_overwrite) {
+    if (amrex::ParallelContext::IOProcessorSub()) {
+      if (amrex::FileExists(plotfilename)) {
+        amrex::FileSystem::RemoveAll(plotfilename);
+      }
+    }
+  }
+
+  amrex::VisMF::SetNOutFiles(m_nfiles);
+
+  //----------------------------------------------------------------
+  // Average down the state
+  averageDownState(AmrOldTime);
+  if (m_nAux > 0) {
+    averageDownAux(AmrOldTime);
+  }
+  // Get consistent reaction data across level
+  if ((m_do_react != 0) && (m_skipInstantRR == 0) && (m_plot_react != 0)) {
+    averageDownReaction();
+  }
+
+  //----------------------------------------------------------------
+  // Number of components
+  int ncomp = 0;
+
+  // State
+  if (m_incompressible != 0) {
+    // Velocity + pressure gradients
+    ncomp = 2 * AMREX_SPACEDIM;
+  } else {
+    // State + pressure gradients
+    if (m_plot_grad_p != 0) {
+      ncomp = NVAR + AMREX_SPACEDIM;
+    } else {
+      ncomp = NVAR;
+    }
+    // Make the plot lighter by dropping species by default
+    if (m_plotStateSpec == 0) {
+      ncomp -= NUM_SPECIES;
+    }
+    if (m_has_divu != 0) {
+      ncomp += 1;
+    }
+  }
+
+  ncomp += m_nAux;
+
+  // Reactions
+  if ((m_do_react != 0) && (m_skipInstantRR == 0) && (m_plot_react != 0)) {
+    // Cons Rate
+    ncomp += nCompIR();
+    // FunctCall
+    ncomp += 1;
+    // Extras:
+    if (m_plotHeatRelease != 0) {
+      ncomp += 1;
+    }
+  }
+
+#ifdef AMREX_USE_EB
+  // Include volume fraction in plotfile
+  ncomp += 1;
+#endif
+
+#ifdef PELE_USE_RADIATION
+  if (do_rad_solve) {
+    ncomp += 3;
+  }
+#endif
+
+  // Derive
+  int deriveEntryCount = 0;
+  for (int ivar = 0; ivar < m_derivePlotVarCount; ivar++) {
+    const PeleLMDeriveRec* rec = derive_lst.get(m_derivePlotVars[ivar]);
+    deriveEntryCount += rec->numDerive();
+  }
+  ncomp += deriveEntryCount;
+#ifdef PELE_USE_SPRAY
+  if (do_spray_particles) {
+    ncomp += SprayParticleContainer::NumDeriveVars();
+    if (SprayParticleContainer::plot_spray_src) {
+      ncomp += AMREX_SPACEDIM + 2 + SPRAY_FUEL_NUM;
+    }
+  }
+#endif
+
+#ifdef PELE_USE_PLASMA
+  if (m_do_extraEFdiags) {
+    ncomp += NUM_IONS * AMREX_SPACEDIM;
+  }
+#endif
+
+  if (m_do_les && m_plot_les) {
+    ncomp += 1;
+  }
+
+  if (m_plot_extSource) {
+    ncomp += NVAR;
+  }
+
+  //----------------------------------------------------------------
+  // Plot MultiFabs
+  amrex::Vector<amrex::MultiFab> mf_plt(finest_level + 1);
+  for (int lev = 0; lev <= finest_level; ++lev) {
+    mf_plt[lev].define(
+      grids[lev], dmap[lev], ncomp, 0, amrex::MFInfo(), Factory(lev));
+  }
+
+  //----------------------------------------------------------------
+  // Components names
+  amrex::Vector<std::string> names;
+  pele::physics::eos::speciesNames<pele::physics::PhysicsType::eos_type>(
+    names, &(eos_parms.host_parm()));
+
+  amrex::Vector<std::string> plt_VarsName;
+  AMREX_D_TERM(plt_VarsName.push_back("x_velocity");
+               , plt_VarsName.push_back("y_velocity");
+               , plt_VarsName.push_back("z_velocity"));
+  if (m_incompressible == 0) {
+    plt_VarsName.push_back("density");
+    if (m_plotStateSpec != 0) {
+      for (int n = 0; n < NUM_SPECIES; n++) {
+        plt_VarsName.push_back("rho.Y(" + names[n] + ")");
+      }
+    }
+    plt_VarsName.push_back("rhoh");
+    plt_VarsName.push_back("temp");
+    plt_VarsName.push_back("RhoRT");
+#ifdef PELE_USE_PLASMA
+    plt_VarsName.push_back("nE");
+    plt_VarsName.push_back("phiV");
+#endif
+#ifdef PELE_USE_SOOT
+    for (int mom = 0; mom < NUMSOOTVAR; mom++) {
+      std::string sootname = soot_model->sootVariableName(mom);
+      plt_VarsName.push_back(sootname);
+    }
+#endif
+#ifdef PELE_USE_RADIATION
+    if (do_rad_solve) {
+      plt_VarsName.push_back("rad.G");
+      plt_VarsName.push_back("rad.kappa");
+      plt_VarsName.push_back("rad.emis");
+    }
+#endif
+    if (m_has_divu != 0) {
+      plt_VarsName.push_back("divu");
+    }
+  }
+
+  if (m_plot_grad_p != 0) {
+    AMREX_D_TERM(plt_VarsName.push_back("gradpx");
+                 , plt_VarsName.push_back("gradpy");
+                 , plt_VarsName.push_back("gradpz"));
+  }
+
+  for (int n = 0; n < m_nAux; n++) {
+    plt_VarsName.push_back(m_aux_names[n]);
+  }
+
+  if ((m_do_react != 0) && (m_skipInstantRR == 0) && (m_plot_react != 0)) {
+    for (int n = 0; n < NUM_SPECIES; n++) {
+      plt_VarsName.push_back("I_R(" + names[n] + ")");
+    }
+#ifdef PELE_USE_PLASMA
+    plt_VarsName.push_back("I_R(nE)");
+#endif
+    plt_VarsName.push_back("FunctCall");
+    // Extras:
+    if (m_plotHeatRelease != 0) {
+      plt_VarsName.push_back("HeatRelease");
+    }
+  }
+
+#ifdef AMREX_USE_EB
+  plt_VarsName.push_back("volFrac");
+#endif
+
+  for (int ivar = 0; ivar < m_derivePlotVarCount; ivar++) {
+    const PeleLMDeriveRec* rec = derive_lst.get(m_derivePlotVars[ivar]);
+    for (int dvar = 0; dvar < rec->numDerive(); dvar++) {
+      plt_VarsName.push_back(rec->variableName(dvar));
+    }
+  }
+#ifdef PELE_USE_SPRAY
+  if (SprayParticleContainer::NumDeriveVars() > 0) {
+    // We need virtual particles for the lower levels
+    setupVirtualParticles(0);
+    for (const auto& spray_derive_name :
+         SprayParticleContainer::DeriveVarNames()) {
+      plt_VarsName.push_back(spray_derive_name);
+    }
+  }
+  if (do_spray_particles && SprayParticleContainer::plot_spray_src) {
+    plt_VarsName.push_back("spray_mass_src");
+    plt_VarsName.push_back("spray_energy_src");
+    AMREX_D_TERM(plt_VarsName.push_back("spray_momentumX_src");
+                 , plt_VarsName.push_back("spray_momentumY_src");
+                 , plt_VarsName.push_back("spray_momentumZ_src"));
+    for (const auto& spray_fuel_name :
+         SprayParticleContainer::m_sprayDepNames) {
+      plt_VarsName.push_back("spray_" + spray_fuel_name + "_src");
+    }
+  }
+#endif
+
+#ifdef PELE_USE_PLASMA
+  if (m_do_extraEFdiags) {
+    for (int ivar = 0; ivar < NUM_IONS; ++ivar) {
+      for (int idim = 0; idim < AMREX_SPACEDIM; ++idim) {
+        std::string dir = (idim == 0) ? "X" : ((idim == 1) ? "Y" : "Z");
+        plt_VarsName.push_back(
+          "DriftFlux_" + names[NUM_SPECIES - NUM_IONS + ivar] + "_" + dir);
+      }
+    }
+  }
+#endif
+
+  if (m_do_les && m_plot_les) {
+    plt_VarsName.push_back("viscturb");
+  }
+
+#if NUM_ODE > 0
+  for (int n = 0; n < NUM_ODE; n++) {
+    plt_VarsName.push_back(m_ode_names[n]);
+  }
+#endif
+
+  // External source terms
+  if (m_plot_extSource) {
+    for (int ivar = 0; ivar < NVAR; ++ivar) {
+      plt_VarsName.push_back("extsource_" + stateVariableName(ivar));
+    }
+  }
+
+  //----------------------------------------------------------------
+  // Fill the plot MultiFabs
+  for (int lev = 0; lev <= finest_level; ++lev) {
+    int cnt = 0;
+    if (m_incompressible != 0) {
+      amrex::MultiFab::Copy(
+        mf_plt[lev], m_leveldata_old[lev]->state, 0, cnt, AMREX_SPACEDIM, 0);
+      cnt += AMREX_SPACEDIM;
+    } else {
+      // Velocity and density
+      amrex::MultiFab::Copy(
+        mf_plt[lev], m_leveldata_old[lev]->state, 0, cnt, AMREX_SPACEDIM + 1,
+        0);
+      cnt += AMREX_SPACEDIM + 1;
+      // Species only if requested
+      if (m_plotStateSpec != 0) {
+        amrex::MultiFab::Copy(
+          mf_plt[lev], m_leveldata_old[lev]->state, FIRSTSPEC, cnt, NUM_SPECIES,
+          0);
+        cnt += NUM_SPECIES;
+      }
+      amrex::MultiFab::Copy(
+        mf_plt[lev], m_leveldata_old[lev]->state, RHOH, cnt, 3, 0);
+      cnt += 3;
+#ifdef PELE_USE_PLASMA
+      amrex::MultiFab::Copy(
+        mf_plt[lev], m_leveldata_old[lev]->state, NE, cnt, 2, 0);
+      cnt += 2;
+#endif
+#ifdef PELE_USE_SOOT
+      amrex::MultiFab::Copy(
+        mf_plt[lev], m_leveldata_old[lev]->state, FIRSTSOOT, cnt, NUMSOOTVAR,
+        0);
+      cnt += NUMSOOTVAR;
+#endif
+#ifdef PELE_USE_RADIATION
+      if (do_rad_solve) {
+        amrex::MultiFab::Copy(mf_plt[lev], rad_model->G()[lev], 0, cnt, 1, 0);
+        cnt += 1;
+        amrex::MultiFab::Copy(
+          mf_plt[lev], rad_model->kappa()[lev], 0, cnt, 1, 0);
+        cnt += 1;
+        amrex::MultiFab::Copy(
+          mf_plt[lev], rad_model->emis()[lev], 0, cnt, 1, 0);
+        cnt += 1;
+      }
+#endif
+      if (m_has_divu != 0) {
+        amrex::MultiFab::Copy(
+          mf_plt[lev], m_leveldata_old[lev]->divu, 0, cnt, 1, 0);
+        cnt += 1;
+      }
+    }
+    if (m_plot_grad_p != 0) {
+      amrex::MultiFab::Copy(
+        mf_plt[lev], m_leveldata_old[lev]->gp, 0, cnt, AMREX_SPACEDIM, 0);
+      cnt += AMREX_SPACEDIM;
+    }
+
+    if (m_nAux > 0) {
+      amrex::MultiFab::Copy(
+        mf_plt[lev], m_leveldata_old[lev]->auxiliaries, 0, cnt, m_nAux, 0);
+      cnt += m_nAux;
+    }
+
+    if ((m_do_react != 0) && (m_skipInstantRR == 0) && (m_plot_react != 0)) {
+      amrex::MultiFab::Copy(
+        mf_plt[lev], m_leveldatareact[lev]->I_R, 0, cnt, nCompIR(), 0);
+      cnt += nCompIR();
+
+      amrex::MultiFab::Copy(
+        mf_plt[lev], m_leveldatareact[lev]->functC, 0, cnt, 1, 0);
+      cnt += 1;
+
+      if (m_plotHeatRelease != 0) {
+        std::unique_ptr<amrex::MultiFab> mf;
+        mf = std::make_unique<amrex::MultiFab>(grids[lev], dmap[lev], 1, 0);
+        getHeatRelease(lev, mf.get());
+        amrex::MultiFab::Copy(mf_plt[lev], *mf, 0, cnt, 1, 0);
+        cnt += 1;
+      }
+    }
+
+#ifdef AMREX_USE_EB
+    amrex::MultiFab::Copy(
+      mf_plt[lev], EBFactory(lev).getVolFrac(), 0, cnt, 1, 0);
+    cnt += 1;
+#endif
+
+    for (int ivar = 0; ivar < m_derivePlotVarCount; ivar++) {
+      std::unique_ptr<amrex::MultiFab> mf;
+      mf = derive(m_derivePlotVars[ivar], m_cur_time, lev, 0);
+      amrex::MultiFab::Copy(mf_plt[lev], *mf, 0, cnt, mf->nComp(), 0);
+      cnt += mf->nComp();
+    }
+#ifdef PELE_USE_SPRAY
+    if (SprayParticleContainer::NumDeriveVars() > 0) {
+      const int num_spray_derive = SprayParticleContainer::NumDeriveVars();
+      mf_plt[lev].setVal(0., cnt, num_spray_derive);
+      SprayPC->computeDerivedVars(mf_plt[lev], lev, cnt);
+      if (lev < finest_level) {
+        amrex::MultiFab tmp_plt(
+          grids[lev], dmap[lev], num_spray_derive, 0, amrex::MFInfo(),
+          Factory(lev));
+        tmp_plt.setVal(0.);
+        VirtPC->computeDerivedVars(tmp_plt, lev, 0);
+        amrex::MultiFab::Add(mf_plt[lev], tmp_plt, 0, cnt, num_spray_derive, 0);
+      }
+      cnt += num_spray_derive;
+    }
+    if (do_spray_particles && SprayParticleContainer::plot_spray_src) {
+      SprayComps scomps = SprayParticleContainer::getSprayComps();
+      amrex::MultiFab::Copy(
+        mf_plt[lev], *m_spraysource[lev], scomps.rhoSrcIndx, cnt++, 1, 0);
+      amrex::MultiFab::Copy(
+        mf_plt[lev], *m_spraysource[lev], scomps.engSrcIndx, cnt++, 1, 0);
+      amrex::MultiFab::Copy(
+        mf_plt[lev], *m_spraysource[lev], scomps.momSrcIndx, cnt,
+        AMREX_SPACEDIM, 0);
+      cnt += AMREX_SPACEDIM;
+      for (int spf = 0; spf < SPRAY_FUEL_NUM; ++spf) {
+        amrex::MultiFab::Copy(
+          mf_plt[lev], *m_spraysource[lev], scomps.specSrcIndx + spf, cnt++, 1,
+          0);
+      }
+    }
+#endif
+#ifdef PELE_USE_PLASMA
+    if (m_do_extraEFdiags) {
+      amrex::MultiFab::Copy(
+        mf_plt[lev], *m_ionsFluxes[lev], 0, cnt, m_ionsFluxes[lev]->nComp(), 0);
+      cnt += m_ionsFluxes[lev]->nComp();
+    }
+#endif
+
+    if (m_do_les && m_plot_les) {
+      constexpr amrex::Real fact = 0.5 / AMREX_SPACEDIM;
+      auto const& plot_arr = mf_plt[lev].arrays();
+      AMREX_D_TERM(
+        auto const& mut_arr_x =
+          m_leveldata_old[lev]->visc_turb_fc[0].const_arrays();
+        , auto const& mut_arr_y =
+            m_leveldata_old[lev]->visc_turb_fc[1].const_arrays();
+        , auto const& mut_arr_z =
+            m_leveldata_old[lev]->visc_turb_fc[2].const_arrays();)
+      // interpolate turbulent viscosity from faces to centers
+      amrex::ParallelFor(
+        mf_plt[lev],
+        [=] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
+          plot_arr[box_no](i, j, k, cnt) =
+            fact *
+            (AMREX_D_TERM(
+              mut_arr_x[box_no](i, j, k) + mut_arr_x[box_no](i + 1, j, k),
+              +mut_arr_y[box_no](i, j, k) + mut_arr_y[box_no](i, j + 1, k),
+              +mut_arr_z[box_no](i, j, k) + mut_arr_z[box_no](i, j, k + 1)));
+        });
+      amrex::Gpu::streamSynchronize();
+      cnt += 1;
+    }
+
+#if NUM_ODE > 0
+    amrex::MultiFab::Copy(
+      mf_plt[lev], m_leveldata_new[lev]->state, FIRSTODE, cnt, NUM_ODE, 0);
+    cnt += NUM_ODE;
+#endif
+
+    if (m_plot_extSource) {
+      amrex::MultiFab::Copy(mf_plt[lev], *m_extSource[lev], 0, cnt, NVAR, 0);
+    }
+
+#ifdef AMREX_USE_EB
+    if (m_plot_zeroEBcovered != 0) {
+      EB_set_covered(mf_plt[lev], 0.0);
+    }
+#endif
+  }
+
+  // No SubCycling, all levels the same step.
+  amrex::Vector<int> istep(finest_level + 1, m_nstep);
+
+#ifdef AMREX_USE_HDF5
+  if (m_write_hdf5_pltfile) {
+    amrex::WriteMultiLevelPlotfileHDF5(
+      plotfilename, finest_level + 1, GetVecOfConstPtrs(mf_plt), plt_VarsName,
+      Geom(), m_cur_time, istep, refRatio());
+  } else
+#endif
+  {
+    amrex::WriteMultiLevelPlotfile(
+      plotfilename, finest_level + 1, GetVecOfConstPtrs(mf_plt), plt_VarsName,
+      Geom(), m_cur_time, istep, refRatio());
+  }
+
+#ifdef PELE_USE_SPRAY
+  if (do_spray_particles) {
+    bool is_spraycheck = false;
+    for (int lev = 0; lev <= finest_level; ++lev) {
+      SprayPC->SprayParticleIO(lev, is_spraycheck, plotfilename);
+      // Remove virtual particles that were made for derived variables
+      removeVirtualParticles(lev);
+    }
+  }
+#endif
+}
+
+void
 PeleLM::WriteHeader(const std::string& name, bool is_checkpoint) const
 {
   if (amrex::ParallelDescriptor::IOProcessor()) {

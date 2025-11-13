@@ -1009,6 +1009,7 @@ public:
   //-----------------------------------------------------------------------------
   // I/O
   void WritePlotFile();
+  void WritePlotFileMidTime();
   bool writePlotNow() const;
   bool checkMessage(const std::string& a_action) const;
   void WriteCheckPointFile();
@@ -1923,6 +1924,7 @@ public:
   int m_nstep = -1;
   int m_max_step = -1;
   int m_nfiles = 1;
+  int m_do_old_plt = 0;
 
   int m_regrid_int = -1;
   int m_regrid_on_restart = 0;
