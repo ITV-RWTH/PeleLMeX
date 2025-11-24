@@ -717,7 +717,7 @@ PeleLM::readParameters()
   m_nfiles =
     amrex::max(1, amrex::min(amrex::ParallelDescriptor::NProcs(), 256));
   ppa.query("n_files", m_nfiles);
-  ppa.query("do_old_plt", m_do_old_plt);
+  ppa.query("do_mid_plt", m_do_mid_plt);
 
   if (max_level > 0 || (m_doLoadBalance != 0)) {
     ppa.query("regrid_int", m_regrid_int);
