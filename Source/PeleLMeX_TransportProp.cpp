@@ -281,8 +281,8 @@ PeleLM::calcDiffusivity(const TimeStamp a_time)
 
     amrex::ParallelFor(
       ldata_p->diff_cc, ldata_p->diff_cc.nGrowVect(),
-      [sma, dma, soret_idx, ltransparm, do_fixed_Le, do_fixed_Pr, do_soret,
-       Le_inv, Pr_inv, leosparm
+      [sma, dma, soret_idx, ltransparm, do_fixed_Le, do_fixed_Le_i, do_fixed_Pr, do_soret,
+       Le_inv, Le_i_inv, Pr_inv, leosparm
 #if PELE_USE_PLASMA
        ,
        kma, mwt, zk = zk
