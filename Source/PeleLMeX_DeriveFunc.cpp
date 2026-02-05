@@ -1415,7 +1415,7 @@ pelelmex_derdiffc(
   amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
      getTransportCoeff<pele::physics::PhysicsType::eos_type>(
         i, j, k, do_fixed_Le, do_fixed_Le_i, do_fixed_Pr, do_soret, LeInv, Le_i_Inv, PrInv, rhoY, T,
-        rhoD, rhotheta, lambda, mu, ltransparm);
+        rhoD, rhotheta, lambda, mu, ltransparm, leosparm);
     });
 }
 
@@ -1462,7 +1462,7 @@ pelelmex_derlambda(
     [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
       getTransportCoeff<pele::physics::PhysicsType::eos_type>(
         i, j, k, do_fixed_Le, do_fixed_Le_i, do_fixed_Pr, do_soret, LeInv, Le_i_Inv, PrInv, rhoY, T,
-        rhoD, rhotheta, lambda, mu, ltransparm);
+        rhoD, rhotheta, lambda, mu, ltransparm, leosparm);
     });
 }
 

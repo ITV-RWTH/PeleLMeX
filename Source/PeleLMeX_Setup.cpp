@@ -510,10 +510,10 @@ PeleLM::readParameters()
   if (m_fixed_Le_i != 0 && !m_do_les) { // Only ask for Lewis number when not
                                       // LES, determined by Prandtl and
                                       // Schmidt outside of this
-    Vector<std::string> spec_names;
+    amrex::Vector<std::string> spec_names;
     pele::physics::eos::speciesNames<pele::physics::PhysicsType::eos_type>(spec_names);
 
-    ParmParse pplewisi("peleLM.Lewis");
+    amrex::ParmParse pplewisi("peleLM.Lewis");
     
     amrex::Real Lewis_i;
     for(int n=0; n < spec_names.size(); n++){
