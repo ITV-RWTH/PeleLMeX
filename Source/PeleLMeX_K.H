@@ -14,9 +14,11 @@ getTransportCoeff(
   const int j,
   const int k,
   const bool do_fixed_Le,
+  const bool do_fixed_Le_i,
   const bool do_fixed_Pr,
   const bool do_soret,
   amrex::Real LeInv,
+  amrex::Array<amrex::Real, NUM_SPECIES> Le_i_Inv,
   amrex::Real PrInv,
   amrex::Array4<const amrex::Real> const& rhoY,
   amrex::Array4<const amrex::Real> const& T,
@@ -59,7 +61,7 @@ getTransportCoeff(
   constexpr bool get_xi = false; // always ignore bulk viscosity
   constexpr bool get_mu = true;  // always get dynamic viscosity
   const bool get_lam = !do_fixed_Pr;
-  const bool get_Ddiag = !do_fixed_Le;
+  const bool get_Ddiag = (!do_fixed_Le && !do_fixed_Le_i);
   const bool get_chi = do_soret;
   auto trans = pele::physics::PhysicsType::transport();
   trans.transport(
@@ -77,6 +79,15 @@ getTransportCoeff(
     for (int n = 0; n < NUM_SPECIES; ++n) {
       rhoDi(i, j, k, n) = ScInv * mu(i, j, k);
     }
+  } else if (do_fixed_Pr && do_fixed_Le_i) { // fixed Pr and Le, transport all dependent
+                                    // on visc
+    amrex::Real cpmix_cgs = 0.0;
+    eos.TY2Cp(T(i, j, k), y, cpmix_cgs);
+    lambda(i, j, k) = PrInv * c2m::Cp(cpmix_cgs) * mu(i, j, k);
+    amrex::Real ScInv = PrInv * LeInv;
+    for (int n = 0; n < NUM_SPECIES; n++) {
+      rhoDi(i, j, k, n) = PrInv * Le_i_Inv[n] * mu(i, j, k);
+    }
   } else if (do_fixed_Pr) { // fixed Pr, still use species diffs
     amrex::Real cpmix_cgs = 0.0;
     eos.TY2Cp(T(i, j, k), y, cpmix_cgs);
@@ -90,6 +101,14 @@ getTransportCoeff(
     eos.TY2Cp(T(i, j, k), y, cpmix_cgs);
     for (int n = 0; n < NUM_SPECIES; ++n) {
       rhoDi(i, j, k, n) = lambda_cgs * 1.0e-1 * LeInv / cpmix_cgs;
+    }
+  } else if (do_fixed_Le_i) { // fixed Le_i, still use thermal cond
+    lambda(i, j, k) = c2m::Lambda(lambda_cgs);
+    amrex::Real cpmix_cgs = 0.0;
+    eos.TY2Cp(T(i, j, k), y, cpmix_cgs);
+    const amrex::Real cpmix = c2m::Cp(cpmix_cgs);
+    for (int n = 0; n < NUM_SPECIES; n++) {
+      rhoDi(i, j, k, n) = lambda(i, j, k) * Le_i_Inv[n] / cpmix;
     }
   } else { // full MA model, with Soret if needed
     lambda(i, j, k) = c2m::Lambda(lambda_cgs);
@@ -123,9 +142,11 @@ getTransportCoeff<pele::physics::eos::Manifold>(
   const int j,
   const int k,
   const bool /*do_fixed_Le*/,
+  const bool /*do_fixed_Le_i*/,
   const bool /*do_fixed_Pr*/,
   const bool do_soret,
   amrex::Real /*LeInv*/,
+  amrex::Array<amrex::Real, NUM_SPECIES> /*Le_i_Inv*/,
   amrex::Real /*PrInv*/,
   amrex::Array4<const amrex::Real> const& rhoY,
   amrex::Array4<const amrex::Real> const& T,

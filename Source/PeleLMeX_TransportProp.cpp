@@ -249,7 +249,9 @@ PeleLM::calcDiffusivity(const TimeStamp a_time)
 
   const amrex::Real Pr_inv = m_Prandtl_inv;
   const amrex::Real Le_inv = m_Lewis_inv;
+  const amrex::Array<amrex::Real, NUM_SPECIES> Le_i_inv = m_Lewis_i_inv;
   const bool do_fixed_Le = (m_fixed_Le != 0);
+  const bool do_fixed_Le_i = (m_fixed_Le_i != 0);
   const bool do_fixed_Pr = (m_fixed_Pr != 0);
   const bool do_soret = (m_use_soret != 0);
   // pass soret array, or pass mu as dummy (won't do anything)
@@ -287,7 +289,7 @@ PeleLM::calcDiffusivity(const TimeStamp a_time)
 #endif
     ] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
         getTransportCoeff<pele::physics::PhysicsType::eos_type>(
-          i, j, k, do_fixed_Le, do_fixed_Pr, do_soret, Le_inv, Pr_inv,
+          i, j, k, do_fixed_Le, do_fixed_Le_i, do_fixed_Pr, do_soret, Le_inv, Le_i_inv, Pr_inv,
           amrex::Array4<amrex::Real const>(sma[box_no], FIRSTSPEC),
           amrex::Array4<amrex::Real const>(sma[box_no], TEMP),
           amrex::Array4<amrex::Real>(dma[box_no], 0),

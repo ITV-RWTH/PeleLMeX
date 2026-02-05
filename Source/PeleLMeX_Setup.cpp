@@ -485,6 +485,7 @@ PeleLM::readParameters()
   }
   pp.query("unity_Le", m_unity_Le);
   pp.query("fixed_Le", m_fixed_Le);
+  pp.query("fixed_Le_i", m_fixed_Le_i);
   pp.query("fixed_Pr", m_fixed_Pr);
   if (m_unity_Le != 0) {
     m_fixed_Le = 1;
@@ -512,6 +513,37 @@ PeleLM::readParameters()
       m_Schmidt_inv = m_Lewis_inv * m_Prandtl_inv;
     }
   }
+  if (m_fixed_Le_i != 0 && !m_do_les) { // Only ask for Lewis number when not
+                                      // LES, determined by Prandtl and
+                                      // Schmidt outside of this
+    amrex::Vector<std::string> spec_names;
+    pele::physics::eos::speciesNames<pele::physics::PhysicsType::eos_type>(spec_names);
+
+    amrex::ParmParse pplewisi("peleLM.Lewis");
+    
+    amrex::Real Lewis_i;
+    for(int n=0; n < spec_names.size(); n++){
+      Lewis_i = 1.0;
+
+      pplewisi.query(spec_names[n].c_str(), Lewis_i);
+      amrex::Print() << "Le_" << spec_names[n] << " = " << Lewis_i << std::endl;
+      m_Lewis_i_inv[n] = 1.0 / Lewis_i;
+    }
+  }
+  if (m_fixed_Pr != 0) {
+    amrex::Real Prandtl = 0.7;
+    pp.query("Prandtl", Prandtl);
+    m_Prandtl_inv = 1.0 / Prandtl;
+  }
+  if (m_fixed_Le != 0 && m_fixed_Pr != 0 && !m_do_les) { // calculate Schmidt in
+                                                         // case of no LES from
+                                                         // Lewis and Prandtl
+    m_Schmidt_inv = m_Lewis_inv * m_Prandtl_inv;
+  }
+  if (m_do_les) { // calculate Lewis in case of LES
+    m_Lewis_inv = m_Prandtl_inv / m_Schmidt_inv;
+  }
+
   if (
     (m_use_wbar != 0 || m_use_soret != 0) &&
     (m_fixed_Le != 0 || m_fixed_Pr != 0)) {
@@ -1200,6 +1232,11 @@ PeleLM::derivedSetup()
     derive_lst.add(
       "HeatRelease", amrex::IndexType::TheCellType(), 1,
       pelelmex_derheatrelease, the_same_box);
+
+    // Heat capacity
+    derive_lst.add(
+      "Cpmix", amrex::IndexType::TheCellType(), 1,
+      pelelmex_dercpmix, the_same_box);
 
     // Thermal diffusivity
     derive_lst.add(
