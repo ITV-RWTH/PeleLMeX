@@ -2,7 +2,7 @@
 #include <PeleLMeX_K.H>
 
 amrex::Real
-PeleLM::computeDt(int is_init, const TimeStamp& a_time)
+PeleLM::computeDt(const int is_init, const TimeStamp a_time)
 {
   BL_PROFILE("PeleLMeX::computeDt()");
 
@@ -96,7 +96,7 @@ PeleLM::computeDt(int is_init, const TimeStamp& a_time)
 }
 
 amrex::Real
-PeleLM::estConvectiveDt(const TimeStamp& a_time)
+PeleLM::estConvectiveDt(const TimeStamp a_time)
 {
 
   amrex::Real estdt = 1.0e200;
@@ -114,12 +114,12 @@ PeleLM::estConvectiveDt(const TimeStamp& a_time)
 
     //----------------------------------------------------------------
     // Get velocity forces
-    int nGrow_force = 0;
+    constexpr int nGrow_force = 0;
     amrex::MultiFab velForces(
       grids[lev], dmap[lev], AMREX_SPACEDIM, nGrow_force, amrex::MFInfo(),
       Factory(lev));
 
-    int add_gradP = 1;
+    constexpr int add_gradP = 1;
     getVelForces(a_time, lev, nullptr, &velForces, add_gradP);
 
     //----------------------------------------------------------------
@@ -155,7 +155,7 @@ PeleLM::estConvectiveDt(const TimeStamp& a_time)
 }
 
 amrex::Real
-PeleLM::estDivUDt(const TimeStamp& a_time)
+PeleLM::estDivUDt(const TimeStamp a_time)
 {
 
   amrex::Real estdt = 1.0e200;
@@ -227,7 +227,7 @@ PeleLM::estDivUDt(const TimeStamp& a_time)
 }
 
 void
-PeleLM::checkDt(const TimeStamp& a_time, const amrex::Real& a_dt)
+PeleLM::checkDt(const TimeStamp a_time, const amrex::Real a_dt)
 {
   BL_PROFILE("PeleLMeX::checkDt()");
 
@@ -236,29 +236,25 @@ PeleLM::checkDt(const TimeStamp& a_time, const amrex::Real& a_dt)
   }
 
   for (int lev = 0; lev <= finest_level; ++lev) {
-
     auto* ldata_p = getLevelDataPtr(lev, a_time);
+    const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dxinv =
+      geom[lev].InvCellSizeArray();
 
-    const auto dxinv = geom[lev].InvCellSizeArray();
+    auto const& state_ma = ldata_p->state.const_arrays();
+    auto const& divu_ma = ldata_p->divu.const_arrays();
 
-#ifdef AMREX_USE_OMP
-#pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
-#endif
-    for (amrex::MFIter mfi(ldata_p->state, amrex::TilingIfNotGPU());
-         mfi.isValid(); ++mfi) {
-      const amrex::Box& bx = mfi.tilebox();
-      auto const& rho = ldata_p->state.const_array(mfi, DENSITY);
-      auto const& vel = ldata_p->state.const_array(mfi, VELX);
-      auto const& divu = ldata_p->divu.const_array(mfi);
-      int divu_checkFlag = m_divu_checkFlag;
-      auto dtfac = m_divu_dtFactor;
-      auto rhoMin = m_divu_rhoMin;
-      amrex::ParallelFor(
-        bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-          check_divu_dt(
-            i, j, k, divu_checkFlag, dtfac, rhoMin, dxinv, rho, vel, divu,
-            a_dt);
-        });
-    }
+    amrex::ParallelFor(
+      ldata_p->state,
+      [state_ma, divu_ma, dxinv, a_dt, divu_checkFlag = m_divu_checkFlag,
+       dtfac = m_divu_dtFactor,
+       rhoMin =
+         m_divu_rhoMin] AMREX_GPU_DEVICE(int box_no, int i, int j, int k) noexcept {
+        amrex::Array4<amrex::Real const> rho(state_ma[box_no], DENSITY);
+        amrex::Array4<amrex::Real const> vel(state_ma[box_no], VELX);
+        amrex::Array4<amrex::Real const> divu = divu_ma[box_no];
+        check_divu_dt(
+          i, j, k, divu_checkFlag, dtfac, rhoMin, dxinv, rho, vel, divu, a_dt);
+      });
+    amrex::Gpu::streamSynchronize();
   }
 }
