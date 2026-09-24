@@ -10,6 +10,20 @@
 #include <AMReX_FillPatchUtil.H>
 #include <memory>
 #include <fstream>
+#include <string>
+#include <sundials/sundials_version.h>
+#ifdef AMREX_USE_HIP
+#include <hip/hip_version.h>
+#endif
+#ifdef AMREX_USE_HYPRE
+#include <HYPRE_config.h>
+#endif
+#ifdef PELE_USE_KLU
+#include <klu.h>
+#endif
+#ifdef PELE_USE_MAGMA
+#include <magma_v2.h>
+#endif
 #ifdef AMREX_USE_EB
 #include <AMReX_EBInterpolater.H>
 #endif
@@ -1836,6 +1850,83 @@ PeleLM::WriteJobInfo(const std::string& path) const
     jobInfoFile << "C++ compiler:  " << amrex::buildInfoGetCXXName() << "\n";
     jobInfoFile << "C++ flags:     " << amrex::buildInfoGetCXXFlags() << "\n";
 
+    // Compiler and library versions, from the headers this file was compiled
+    // against. The compiler is the one behind an MPI wrapper, with nvcc the
+    // host compiler.
+    jobInfoFile << "Compiled with: ";
+#if defined(__INTEL_LLVM_COMPILER)
+    jobInfoFile << "Intel oneAPI " << __INTEL_LLVM_COMPILER << " ("
+                << __VERSION__ << ")";
+#elif defined(__NVCOMPILER)
+    jobInfoFile << "NVHPC " << __NVCOMPILER_MAJOR__ << "."
+                << __NVCOMPILER_MINOR__ << "." << __NVCOMPILER_PATCHLEVEL__;
+#elif defined(_CRAYC)
+    jobInfoFile << "Cray " << __VERSION__;
+#elif defined(__clang__)
+    jobInfoFile << __VERSION__;
+#elif defined(__GNUC__)
+    jobInfoFile << "GCC " << __VERSION__;
+#else
+    jobInfoFile << "unknown";
+#endif
+    jobInfoFile << "\n";
+
+#ifdef AMREX_USE_CUDA
+#if defined(__CUDACC_VER_MAJOR__)
+    jobInfoFile << "CUDA:          " << __CUDACC_VER_MAJOR__ << "."
+                << __CUDACC_VER_MINOR__ << "." << __CUDACC_VER_BUILD__ << "\n";
+#else
+    jobInfoFile << "CUDA:          " << CUDART_VERSION / 1000 << "."
+                << (CUDART_VERSION % 1000) / 10 << "\n";
+#endif
+#endif
+#ifdef AMREX_USE_HIP
+    jobInfoFile << "HIP:           " << HIP_VERSION_MAJOR << "."
+                << HIP_VERSION_MINOR << "." << HIP_VERSION_PATCH << "\n";
+#endif
+
+#ifdef AMREX_USE_MPI
+    // Version of the MPI library actually loaded, first line only
+    char mpi_version[MPI_MAX_LIBRARY_VERSION_STRING];
+    int mpi_version_len = 0;
+    MPI_Get_library_version(mpi_version, &mpi_version_len);
+    const std::string mpi(mpi_version);
+    jobInfoFile << "MPI library:   "
+                << amrex::trim(mpi.substr(0, mpi.find('\n'))) << "\n";
+#endif
+
+    // SUNDIALS_GIT_VERSION is the commit the installed library was built from
+    char sundials_lib[64];
+    SUNDIALSGetVersion(sundials_lib, sizeof(sundials_lib));
+#ifdef SUNDIALS_GIT_VERSION
+    const std::string sundials_git = SUNDIALS_GIT_VERSION;
+#else
+    const std::string sundials_git;
+#endif
+    jobInfoFile << "SUNDIALS:      " << SUNDIALS_VERSION;
+    if (!sundials_git.empty()) {
+      jobInfoFile << " (git " << sundials_git << ")";
+    }
+    jobInfoFile << ", loaded library " << sundials_lib << "\n";
+
+#ifdef PELE_USE_KLU
+    jobInfoFile << "SuiteSparse:   " << SUITESPARSE_MAIN_VERSION << "."
+                << SUITESPARSE_SUB_VERSION << "." << SUITESPARSE_SUBSUB_VERSION
+                << " (KLU " << KLU_MAIN_VERSION << "." << KLU_SUB_VERSION << "."
+                << KLU_SUBSUB_VERSION << ")\n";
+#endif
+#ifdef PELE_USE_MAGMA
+    jobInfoFile << "MAGMA:         " << MAGMA_VERSION_MAJOR << "."
+                << MAGMA_VERSION_MINOR << "." << MAGMA_VERSION_MICRO << "\n";
+#endif
+#ifdef AMREX_USE_HYPRE
+    jobInfoFile << "HYPRE:         " << HYPRE_RELEASE_VERSION;
+#ifdef HYPRE_DEVELOP_STRING
+    jobInfoFile << " (" << HYPRE_DEVELOP_STRING << ")";
+#endif
+    jobInfoFile << "\n";
+#endif
+
     jobInfoFile << "\n";
 
     const char* githash1 = amrex::buildInfoGetGitHash(1);
@@ -1843,7 +1934,6 @@ PeleLM::WriteJobInfo(const std::string& path) const
     const char* githash3 = amrex::buildInfoGetGitHash(3);
     const char* githash4 = amrex::buildInfoGetGitHash(4);
     const char* githash5 = amrex::buildInfoGetGitHash(5);
-    const char* githash6 = amrex::buildInfoGetGitHash(6);
     const char* buildgithash = amrex::buildInfoGetBuildGitHash();
 
     if (strlen(githash1) > 0) {
@@ -1859,10 +1949,7 @@ PeleLM::WriteJobInfo(const std::string& path) const
       jobInfoFile << "AMREX-Hydro  git describe: " << githash4 << "\n";
     }
     if (strlen(githash5) > 0) {
-      jobInfoFile << "SUNDIALS     git describe: " << githash5 << "\n";
-    }
-    if (strlen(githash6) > 0) {
-      jobInfoFile << "Mechanism    git describe: " << githash6 << "\n";
+      jobInfoFile << "Mechanism    git describe: " << githash5 << "\n";
     }
     if (strlen(buildgithash) > 0) {
       jobInfoFile << "Case         git describe: " << buildgithash << "\n";
@@ -1875,8 +1962,6 @@ PeleLM::WriteJobInfo(const std::string& path) const
     jobInfoFile << "Transport model: "
                 << pele::physics::PhysicsType::transport_type::identifier()
                 << "\n";
-    jobInfoFile << "NUM_SPECIES:     " << NUM_SPECIES << "\n";
-    jobInfoFile << "NUM_REACTIONS:   " << NUM_REACTIONS << "\n";
 
     // build modules (GNU make only)
     for (int i = 1; i <= amrex::buildInfoGetNumModules(); ++i) {
