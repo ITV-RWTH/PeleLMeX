@@ -1808,6 +1808,12 @@ PeleLM::WriteJobInfo(const std::string& path) const
 #ifdef AMREX_USE_OMP
     jobInfoFile << "number of threads:       " << omp_get_max_threads() << "\n";
 #endif
+#ifdef AMREX_USE_GPU
+    jobInfoFile << "number of GPUs:          "
+                << amrex::Gpu::Device::numDevicesUsed() << "\n";
+    jobInfoFile << "GPU model:               "
+                << amrex::Gpu::Device::deviceName() << "\n";
+#endif
 
     jobInfoFile << "\n\n";
 
