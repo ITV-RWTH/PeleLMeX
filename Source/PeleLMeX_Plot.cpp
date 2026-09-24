@@ -10,7 +10,6 @@
 #include <AMReX_FillPatchUtil.H>
 #include <memory>
 #include <fstream>
-#include <string>
 #include <sundials/sundials_version.h>
 #ifdef AMREX_USE_HIP
 #include <hip/hip_version.h>
@@ -1898,15 +1897,12 @@ PeleLM::WriteJobInfo(const std::string& path) const
     // SUNDIALS_GIT_VERSION is the commit the installed library was built from
     char sundials_lib[64];
     SUNDIALSGetVersion(sundials_lib, sizeof(sundials_lib));
-#ifdef SUNDIALS_GIT_VERSION
-    const std::string sundials_git = SUNDIALS_GIT_VERSION;
-#else
-    const std::string sundials_git;
-#endif
     jobInfoFile << "SUNDIALS:      " << SUNDIALS_VERSION;
-    if (!sundials_git.empty()) {
-      jobInfoFile << " (git " << sundials_git << ")";
+#ifdef SUNDIALS_GIT_VERSION
+    if (strlen(SUNDIALS_GIT_VERSION) > 0) {
+      jobInfoFile << " (git " << SUNDIALS_GIT_VERSION << ")";
     }
+#endif
     jobInfoFile << ", loaded library " << sundials_lib << "\n";
 
 #ifdef PELE_USE_KLU
