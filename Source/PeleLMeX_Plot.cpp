@@ -1850,38 +1850,42 @@ PeleLM::WriteJobInfo(const std::string& path) const
     jobInfoFile << "C++ flags:     " << amrex::buildInfoGetCXXFlags() << "\n";
 
     // Compiler and library versions, from the headers this file was compiled
-    // against. The compiler is the one behind an MPI wrapper, with nvcc the
-    // host compiler.
+    // against. Version macros missing in a library's headers give "unknown".
     jobInfoFile << "Compiled with: ";
-#if defined(__INTEL_LLVM_COMPILER)
-    jobInfoFile << "Intel oneAPI " << __INTEL_LLVM_COMPILER << " ("
-                << __VERSION__ << ")";
-#elif defined(__NVCOMPILER)
-    jobInfoFile << "NVHPC " << __NVCOMPILER_MAJOR__ << "."
-                << __NVCOMPILER_MINOR__ << "." << __NVCOMPILER_PATCHLEVEL__;
-#elif defined(_CRAYC)
-    jobInfoFile << "Cray " << __VERSION__;
-#elif defined(__clang__)
-    jobInfoFile << __VERSION__;
-#elif defined(__GNUC__)
+#if defined(__VERSION__)
+#if defined(__GNUC__) && !defined(__clang__) && !defined(__INTEL_COMPILER)
     jobInfoFile << "GCC " << __VERSION__;
+#else
+    jobInfoFile << __VERSION__;
+#endif
 #else
     jobInfoFile << "unknown";
 #endif
     jobInfoFile << "\n";
 
 #ifdef AMREX_USE_CUDA
-#if defined(__CUDACC_VER_MAJOR__)
-    jobInfoFile << "CUDA:          " << __CUDACC_VER_MAJOR__ << "."
-                << __CUDACC_VER_MINOR__ << "." << __CUDACC_VER_BUILD__ << "\n";
+    jobInfoFile << "CUDA:          ";
+#if defined(__CUDACC_VER_MAJOR__) && defined(__CUDACC_VER_MINOR__) && \
+  defined(__CUDACC_VER_BUILD__)
+    jobInfoFile << __CUDACC_VER_MAJOR__ << "." << __CUDACC_VER_MINOR__ << "."
+                << __CUDACC_VER_BUILD__;
+#elif defined(CUDART_VERSION)
+    jobInfoFile << CUDART_VERSION;
 #else
-    jobInfoFile << "CUDA:          " << CUDART_VERSION / 1000 << "."
-                << (CUDART_VERSION % 1000) / 10 << "\n";
+    jobInfoFile << "unknown";
 #endif
+    jobInfoFile << "\n";
 #endif
 #ifdef AMREX_USE_HIP
-    jobInfoFile << "HIP:           " << HIP_VERSION_MAJOR << "."
-                << HIP_VERSION_MINOR << "." << HIP_VERSION_PATCH << "\n";
+    jobInfoFile << "HIP:           ";
+#if defined(HIP_VERSION_MAJOR) && defined(HIP_VERSION_MINOR) && \
+  defined(HIP_VERSION_PATCH)
+    jobInfoFile << HIP_VERSION_MAJOR << "." << HIP_VERSION_MINOR << "."
+                << HIP_VERSION_PATCH;
+#else
+    jobInfoFile << "unknown";
+#endif
+    jobInfoFile << "\n";
 #endif
 
 #ifdef AMREX_USE_MPI
@@ -1906,17 +1910,39 @@ PeleLM::WriteJobInfo(const std::string& path) const
     jobInfoFile << ", loaded library " << sundials_lib << "\n";
 
 #ifdef PELE_USE_KLU
-    jobInfoFile << "SuiteSparse:   " << SUITESPARSE_MAIN_VERSION << "."
-                << SUITESPARSE_SUB_VERSION << "." << SUITESPARSE_SUBSUB_VERSION
-                << " (KLU " << KLU_MAIN_VERSION << "." << KLU_SUB_VERSION << "."
-                << KLU_SUBSUB_VERSION << ")\n";
+    jobInfoFile << "SuiteSparse:   ";
+#if defined(SUITESPARSE_MAIN_VERSION) && defined(SUITESPARSE_SUB_VERSION) && \
+  defined(SUITESPARSE_SUBSUB_VERSION)
+    jobInfoFile << SUITESPARSE_MAIN_VERSION << "." << SUITESPARSE_SUB_VERSION
+                << "." << SUITESPARSE_SUBSUB_VERSION;
+#else
+    jobInfoFile << "unknown";
+#endif
+#if defined(KLU_MAIN_VERSION) && defined(KLU_SUB_VERSION) && \
+  defined(KLU_SUBSUB_VERSION)
+    jobInfoFile << " (KLU " << KLU_MAIN_VERSION << "." << KLU_SUB_VERSION << "."
+                << KLU_SUBSUB_VERSION << ")";
+#endif
+    jobInfoFile << "\n";
 #endif
 #ifdef PELE_USE_MAGMA
-    jobInfoFile << "MAGMA:         " << MAGMA_VERSION_MAJOR << "."
-                << MAGMA_VERSION_MINOR << "." << MAGMA_VERSION_MICRO << "\n";
+    jobInfoFile << "MAGMA:         ";
+#if defined(MAGMA_VERSION_MAJOR) && defined(MAGMA_VERSION_MINOR) && \
+  defined(MAGMA_VERSION_MICRO)
+    jobInfoFile << MAGMA_VERSION_MAJOR << "." << MAGMA_VERSION_MINOR << "."
+                << MAGMA_VERSION_MICRO;
+#else
+    jobInfoFile << "unknown";
+#endif
+    jobInfoFile << "\n";
 #endif
 #ifdef AMREX_USE_HYPRE
-    jobInfoFile << "HYPRE:         " << HYPRE_RELEASE_VERSION;
+    jobInfoFile << "HYPRE:         ";
+#if defined(HYPRE_RELEASE_VERSION)
+    jobInfoFile << HYPRE_RELEASE_VERSION;
+#else
+    jobInfoFile << "unknown";
+#endif
 #ifdef HYPRE_DEVELOP_STRING
     jobInfoFile << " (" << HYPRE_DEVELOP_STRING << ")";
 #endif
