@@ -1836,6 +1836,9 @@ PeleLM::WriteJobInfo(const std::string& path) const
     const char* githash2 = amrex::buildInfoGetGitHash(2);
     const char* githash3 = amrex::buildInfoGetGitHash(3);
     const char* githash4 = amrex::buildInfoGetGitHash(4);
+    const char* githash5 = amrex::buildInfoGetGitHash(5);
+    const char* githash6 = amrex::buildInfoGetGitHash(6);
+    const char* buildgithash = amrex::buildInfoGetBuildGitHash();
 
     if (strlen(githash1) > 0) {
       jobInfoFile << "PeleLMeX     git describe: " << githash1 << "\n";
@@ -1847,7 +1850,32 @@ PeleLM::WriteJobInfo(const std::string& path) const
       jobInfoFile << "PelePhysics  git describe: " << githash3 << "\n";
     }
     if (strlen(githash4) > 0) {
-      jobInfoFile << "AMREX-Hydro  git describe: " << githash3 << "\n";
+      jobInfoFile << "AMREX-Hydro  git describe: " << githash4 << "\n";
+    }
+    if (strlen(githash5) > 0) {
+      jobInfoFile << "SUNDIALS     git describe: " << githash5 << "\n";
+    }
+    if (strlen(githash6) > 0) {
+      jobInfoFile << "Mechanism    git describe: " << githash6 << "\n";
+    }
+    if (strlen(buildgithash) > 0) {
+      jobInfoFile << "Case         git describe: " << buildgithash << "\n";
+    }
+
+    jobInfoFile << "\n";
+
+    jobInfoFile << "EOS model:       "
+                << pele::physics::PhysicsType::eos_type::identifier() << "\n";
+    jobInfoFile << "Transport model: "
+                << pele::physics::PhysicsType::transport_type::identifier()
+                << "\n";
+    jobInfoFile << "NUM_SPECIES:     " << NUM_SPECIES << "\n";
+    jobInfoFile << "NUM_REACTIONS:   " << NUM_REACTIONS << "\n";
+
+    // build modules (GNU make only)
+    for (int i = 1; i <= amrex::buildInfoGetNumModules(); ++i) {
+      jobInfoFile << amrex::buildInfoGetModuleName(i) << ": "
+                  << amrex::buildInfoGetModuleVal(i) << "\n";
     }
 
     jobInfoFile << "\n\n";
