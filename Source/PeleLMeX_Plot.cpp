@@ -3,6 +3,9 @@
 #include <AMReX_VisMF.H>
 #include <AMReX_AsyncOut.H>
 #include <AMReX_buildInfo.H>
+#ifdef PELE_USE_CMAKE
+#include <PeleGitHashes.H>
+#endif
 #include "PelePhysics.H"
 #include <PltFileManager.H>
 #include <AMReX_ParmParse.H>
@@ -1951,11 +1954,22 @@ PeleLM::WriteJobInfo(const std::string& path) const
 
     jobInfoFile << "\n";
 
+#ifdef PELE_USE_CMAKE
+    // Same hashes as the start-up banner, from PeleGitHashes.H
+    const char* githash1 = PeleBuildInfo::PeleLMeX_git_hash.c_str();
+    const char* githash2 = PeleBuildInfo::AMReX_git_hash.c_str();
+    const char* githash3 = PeleBuildInfo::PelePhysics_git_hash.c_str();
+    const char* githash4 = PeleBuildInfo::AMReXHydro_git_hash.c_str();
+    const char* githash6 = "";
+#else
     const char* githash1 = amrex::buildInfoGetGitHash(1);
     const char* githash2 = amrex::buildInfoGetGitHash(2);
     const char* githash3 = amrex::buildInfoGetGitHash(3);
     const char* githash4 = amrex::buildInfoGetGitHash(4);
-    const char* githash5 = amrex::buildInfoGetGitHash(5);
+    // Entry 5 is the SUNDIALS source (start-up banner); SUNDIALS is reported
+    // above with the version of the installed library
+    const char* githash6 = amrex::buildInfoGetGitHash(6);
+#endif
     const char* buildgithash = amrex::buildInfoGetBuildGitHash();
 
     if (strlen(githash1) > 0) {
@@ -1970,8 +1984,8 @@ PeleLM::WriteJobInfo(const std::string& path) const
     if (strlen(githash4) > 0) {
       jobInfoFile << "AMREX-Hydro  git describe: " << githash4 << "\n";
     }
-    if (strlen(githash5) > 0) {
-      jobInfoFile << "Mechanism    git describe: " << githash5 << "\n";
+    if (strlen(githash6) > 0) {
+      jobInfoFile << "Mechanism    git describe: " << githash6 << "\n";
     }
     if (strlen(buildgithash) > 0) {
       jobInfoFile << "Case         git describe: " << buildgithash << "\n";
