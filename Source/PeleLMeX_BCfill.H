@@ -321,27 +321,50 @@ struct PeleLMCCFillExtDirSpec
     auto iv_3d = amrex::IntVectND<3>(0);
     AMREX_D_TERM(iv_3d[0] = iv[0];, iv_3d[1] = iv[1];, iv_3d[2] = iv[2];);
 
+    // Faces this ghost cell lies beyond on which each species has an ext_dir
+    // BC, as a bit mask (bit 2*idir for the low side, 2*idir+1 for the high
+    // side). Species usually share one mask, but they can differ, e.g. for
+    // charged species under electrode BCs.
+    int mask[NUM_SPECIES];
+    for (int n = 0; n < NUM_SPECIES; ++n) {
+      mask[n] = 0;
+      for (int idir = 0; idir < AMREX_SPACEDIM; ++idir) {
+        if (
+          (iv[idir] < domlo[idir]) &&
+          (bcr[n].data()[idir] == amrex::BCType::ext_dir)) {
+          mask[n] |= 1 << (2 * idir);
+        } else if (
+          (iv[idir] > domhi[idir]) &&
+          (bcr[n].data()[idir + AMREX_SPACEDIM] == amrex::BCType::ext_dir)) {
+          mask[n] |= 1 << (2 * idir + 1);
+        }
+      }
+    }
+
     // bcnormal handles all the state components at once, so it is called
-    // once per face and its result is copied into every species with an
-    // ext_dir BC there. s_ext carries over between faces of a corner ghost
-    // cell, as bcnormal may use its input (e.g. as an initial guess).
-    amrex::Real s_ext[NVAR] = {0.0};
+    // once per face for each distinct mask, and its result is copied into
+    // every species with that mask. Each mask keeps its own s_ext history
+    // across the faces of a corner ghost cell, exactly as a per-species
+    // loop would, since bcnormal may use its input (e.g. as an initial
+    // guess) or leave some entries untouched on a given face.
+    for (int n = 0; n < NUM_SPECIES; ++n) {
+      bool seen = (mask[n] == 0);
+      for (int k = 0; k < n && !seen; ++k) {
+        seen = (mask[k] == mask[n]);
+      }
+      if (seen) {
+        continue;
+      }
 
-    for (int idir = 0; idir < AMREX_SPACEDIM; ++idir) {
-      for (int sgn = 1; sgn >= -1; sgn -= 2) {
-        const bool outside =
-          (sgn > 0) ? (iv[idir] < domlo[idir]) : (iv[idir] > domhi[idir]);
-        if (!outside) {
-          continue;
-        }
-        const int bcidx = (sgn > 0) ? idir : idir + AMREX_SPACEDIM;
+      amrex::Real s_ext[NVAR] = {0.0};
 
-        bool any_ext_dir = false;
-        for (int n = 0; n < NUM_SPECIES; ++n) {
-          any_ext_dir =
-            any_ext_dir || (bcr[n].data()[bcidx] == amrex::BCType::ext_dir);
-        }
-        if (!any_ext_dir) {
+      for (int idir = 0; idir < AMREX_SPACEDIM; ++idir) {
+        int sgn = 0;
+        if (((mask[n] >> (2 * idir)) & 1) != 0) {
+          sgn = 1;
+        } else if (((mask[n] >> (2 * idir + 1)) & 1) != 0) {
+          sgn = -1;
+        } else {
           continue;
         }
 
@@ -358,9 +381,9 @@ struct PeleLMCCFillExtDirSpec
         T::bcnormal(
           x, s_in, s_ext, idir, sgn, time, geom, *lprobparm, lpmfdata);
 
-        for (int n = 0; n < NUM_SPECIES; ++n) {
-          if (bcr[n].data()[bcidx] == amrex::BCType::ext_dir) {
-            rhoY(iv, dcomp + n) = s_ext[FIRSTSPEC + n];
+        for (int k = n; k < NUM_SPECIES; ++k) {
+          if (mask[k] == mask[n]) {
+            rhoY(iv, dcomp + k) = s_ext[FIRSTSPEC + k];
           }
         }
       }
