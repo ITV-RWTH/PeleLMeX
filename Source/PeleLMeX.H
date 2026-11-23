@@ -2357,6 +2357,8 @@ public:
   amrex::Vector<int> m_AdvTypeAux;
   amrex::Vector<int> m_DiffTypeAux;
   amrex::Vector<amrex::Real> m_aux_Schmidt;
+  amrex::Vector<std::string> m_aux_species; // species whose D is used
+  amrex::Vector<int> m_aux_specIdx;         // its index (-1: none)
   amrex::Vector<int> m_aux_advect;
   // R-z
   int m_rz_correction = 0;

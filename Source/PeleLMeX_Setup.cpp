@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <limits>
 #include <string>
 #include <AMReX_Algorithm.H>
@@ -593,6 +594,8 @@ PeleLM::readParameters()
     m_aux_advect.resize(m_nAux);
     m_DiffTypeAux.resize(m_nAux);
     m_aux_Schmidt.resize(m_nAux);
+    m_aux_species.resize(m_nAux);
+    m_aux_specIdx.assign(m_nAux, -1);
     for (int n = 0; n < m_nAux; ++n) {
       pp.get("aux_vars", m_aux_names[n], n);
       std::string aux_prefix = "peleLM." + m_aux_names[n];
@@ -603,6 +606,7 @@ PeleLM::readParameters()
       ppa.query("conservative", m_AdvTypeAux[n]);
       m_aux_Schmidt[n] = -1.0;
       ppa.query("Schmidt", m_aux_Schmidt[n]);
+      ppa.query("species", m_aux_species[n]);
       int diffuse = 1;
       ppa.query("diffuse", diffuse);
       if (diffuse == 0) {
@@ -1464,13 +1468,34 @@ PeleLM::variablesSetup()
     amrex::Print() << " => Total number of state variables: " << NVAR << "\n";
   }
   if (m_nAux > 0) {
+    // Resolve the species whose diffusivity is used by an auxiliary
+    amrex::Vector<std::string> aux_spec_names;
+    if (m_incompressible == 0) {
+      pele::physics::eos::speciesNames<pele::physics::PhysicsType::eos_type>(
+        aux_spec_names, &(eos_parms.host_parm()));
+    }
+    for (int n = 0; n < m_nAux; ++n) {
+      if (!m_aux_species[n].empty()) {
+        const auto it = std::find(
+          aux_spec_names.begin(), aux_spec_names.end(), m_aux_species[n]);
+        if (it == aux_spec_names.end()) {
+          amrex::Abort(
+            "peleLM." + m_aux_names[n] + ".species = " + m_aux_species[n] +
+            " is not a species of the mechanism (or the case is "
+            "incompressible)");
+        }
+        m_aux_specIdx[n] = static_cast<int>(it - aux_spec_names.begin());
+      }
+    }
     for (int n = 0; n < m_nAux; ++n) {
       amrex::Print() << " Auxiliary " + std::to_string(n + 1) + ": "
                      << m_aux_names[n] << "\n";
       amrex::Print() << "   Advective: " << m_aux_advect[n] << "\n";
       amrex::Print() << "   Conservative: " << m_AdvTypeAux[n] << "\n";
       amrex::Print() << "   Diffusive: " << m_DiffTypeAux[n];
-      if (m_aux_Schmidt[n] > 0) {
+      if (m_aux_specIdx[n] >= 0) {
+        amrex::Print() << " - diffusivity of species " << m_aux_species[n];
+      } else if (m_aux_Schmidt[n] > 0) {
         amrex::Print() << " - Schmidt number: " << m_aux_Schmidt[n];
       }
       amrex::Print() << "\n";
