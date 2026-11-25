@@ -2,6 +2,7 @@
 #define PeleLMeX_H
 
 // PeleLMeX includes
+#include <algorithm>
 #include <limits>
 
 #include "PeleLMeX_UserKeys.H"
@@ -2359,6 +2360,13 @@ public:
   amrex::Vector<amrex::Real> m_aux_Schmidt;
   amrex::Vector<std::string> m_aux_species; // species whose D is used
   amrex::Vector<int> m_aux_specIdx;         // its index (-1: none)
+  // True if any auxiliary is a species tracer (diffuses like rho*Y_k)
+  [[nodiscard]] bool auxHasSpeciesTracer() const
+  {
+    return std::any_of(m_aux_specIdx.begin(), m_aux_specIdx.end(), [](int idx) {
+      return idx >= 0;
+    });
+  }
   amrex::Vector<int> m_aux_advect;
   // R-z
   int m_rz_correction = 0;

@@ -288,7 +288,7 @@ PeleLMeX algorithm
     peleLM.a.conservative = 1              # [OPT, DEF = 1] Flag whether this variable is conservative
     peleLM.a.diffuse = 0                   # [OPT, DEF = 1] Flag whether this variable is diffused
     peleLM.a.Schmidt = 0.7                 # [OPT, DEF = -1] Schmidt number for auxiliary variable. If unspecified or negative, assumed to diffuse with unity Lewis number.
-    peleLM.a.species = H2                  # [OPT] Diffuse with the mixture-averaged diffusivity (rho*D) of this species (temperature dependent). Takes precedence over Schmidt. No correction velocity, Soret or wbar terms are applied.
+    peleLM.a.species = H2                  # [OPT] Diffuse with the mixture-averaged diffusivity (rho*D) of this species (temperature dependent). Takes precedence over Schmidt. The variable is then a per-volume tracer, c = rho*Y_k, solved like the species (density-scaled, flux rho*D*grad(c/rho)). No correction velocity, Soret or wbar terms are applied. Auxiliary diffusion is only implemented in non-EB builds.
 
     peleLM.user_defined_ext_sources = 0    # [OPT, DEF=0] Enable user defined source terms. Requires local ProblemSpecificFunctions.cpp.
     peleLM.add_variance_sources = 1        # [OPT, DEF=1] (only relevant for Manifold EOS) include production/dissipation for variances if present in model

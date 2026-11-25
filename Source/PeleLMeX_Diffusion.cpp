@@ -658,10 +658,23 @@ PeleLM::computeDifferentialDiffusionFluxes(
       do_avgDown, GetVecOfConstPtrs(spec_boundary));
 
   if (m_nAux > 0) {
-    getMCDiffusionOp(m_nAux)->computeDiffFluxes(
-      a_auxfluxes, 0, GetVecOfConstPtrs(getAuxVect(a_time)), 0, {},
-      GetVecOfConstPtrs(getAuxDiffusivityVect(a_time)), 0, bcRecAux, m_nAux,
-      do_avgDown, GetVecOfConstPtrs(spec_boundary));
+    if (!auxHasSpeciesTracer()) {
+      getMCDiffusionOp(m_nAux)->computeDiffFluxes(
+        a_auxfluxes, 0, GetVecOfConstPtrs(getAuxVect(a_time)), 0, {},
+        GetVecOfConstPtrs(getAuxDiffusivityVect(a_time)), 0, bcRecAux, m_nAux,
+        do_avgDown, GetVecOfConstPtrs(spec_boundary));
+    } else {
+      // Species tracers are rho*Y-like: scale by density like the species
+      for (int n = 0; n < m_nAux; ++n) {
+        auto bcRecAux1 = fetchBCRecAuxArray(n, 1);
+        getDiffusionOp()->computeDiffFluxes(
+          a_auxfluxes, n, GetVecOfConstPtrs(getAuxVect(a_time)), n,
+          (m_aux_specIdx[n] >= 0) ? GetVecOfConstPtrs(getDensityVect(a_time))
+                                  : amrex::Vector<amrex::MultiFab const*>{},
+          GetVecOfConstPtrs(getAuxDiffusivityVect(a_time)), n, bcRecAux1, 1,
+          do_avgDown, {});
+      }
+    }
   }
 #endif
 
@@ -1374,13 +1387,33 @@ PeleLM::differentialDiffusionUpdate(
       GetVecOfConstPtrs(getDiffusivityVect(AmrNewTime)), 0, bcRecSpec,
       NUM_SPECIES, 0, m_dt, GetVecOfConstPtrs(spec_boundary));
   if (m_nAux > 0) {
-    // Solve for \widetilde{c^{np1,kp1}}
-    // Don't need to provide acoeff, or density.
-    getMCDiffusionOp(m_nAux)->diffuse_scalar(
-      GetVecOfPtrs(getAuxVect(AmrNewTime)), 0,
-      GetVecOfConstPtrs(advData->Forcing_aux), 0, GetVecOfArrOfPtrs(fluxes_aux),
-      0, {}, {}, GetVecOfConstPtrs(getAuxDiffusivityVect(AmrNewTime)), 0,
-      bcRecAux, m_nAux, 0, m_dt, {});
+    if (!auxHasSpeciesTracer()) {
+      // Solve for \widetilde{c^{np1,kp1}}
+      // Don't need to provide acoeff, or density.
+      getMCDiffusionOp(m_nAux)->diffuse_scalar(
+        GetVecOfPtrs(getAuxVect(AmrNewTime)), 0,
+        GetVecOfConstPtrs(advData->Forcing_aux), 0,
+        GetVecOfArrOfPtrs(fluxes_aux), 0, {}, {},
+        GetVecOfConstPtrs(getAuxDiffusivityVect(AmrNewTime)), 0, bcRecAux,
+        m_nAux, 0, m_dt, {});
+    } else {
+      // Species tracers (c = rho*Y_k) are solved like the species: the
+      // density is the A-coefficient and scales the solution.
+      for (int n = 0; n < m_nAux; ++n) {
+        auto bcRecAux1 = fetchBCRecAuxArray(n, 1);
+        const bool scaleByRho = (m_aux_specIdx[n] >= 0);
+        getDiffusionOp()->diffuse_scalar(
+          GetVecOfPtrs(getAuxVect(AmrNewTime)), n,
+          GetVecOfConstPtrs(advData->Forcing_aux), n,
+          GetVecOfArrOfPtrs(fluxes_aux), n,
+          scaleByRho ? GetVecOfConstPtrs(getDensityVect(AmrNewTime))
+                     : amrex::Vector<amrex::MultiFab const*>{},
+          scaleByRho ? GetVecOfConstPtrs(getDensityVect(AmrNewTime))
+                     : amrex::Vector<amrex::MultiFab const*>{},
+          GetVecOfConstPtrs(getAuxDiffusivityVect(AmrNewTime)), n, bcRecAux1, 1,
+          0, m_dt, {});
+      }
+    }
   }
 #endif
 
